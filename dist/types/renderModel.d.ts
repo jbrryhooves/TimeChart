@@ -1,9 +1,4 @@
-import { TimeChartSeriesOptions, TimeChartOptions } from './options';
-export interface DataSeries {
-    options: TimeChartSeriesOptions;
-    data: DataPoint[];
-    yRangeUpdatedIndex: number;
-}
+import { ResolvedOptions } from './options';
 export interface DataPoint {
     x: number;
     y: number;
@@ -14,8 +9,8 @@ export declare class RenderModel {
     yScale: import("d3-scale").ScaleLinear<number, number>;
     private xAutoInitized;
     private yAutoInitized;
-    series: DataSeries[];
-    constructor(options: TimeChartOptions);
+    private seriesInfo;
+    constructor(options: ResolvedOptions);
     onResize(width: number, height: number): void;
     update(): void;
 }

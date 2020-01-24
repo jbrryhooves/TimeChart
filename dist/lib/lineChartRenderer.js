@@ -3,7 +3,7 @@ import { LinkedWebGLProgram, throwIfFalsy } from './webGLUtils';
 import { resolveColorRGBA } from './options';
 const vsSource = `#version 300 es
 layout (location = ${0 /* DATA_POINT */}) in vec2 aDataPoint;
-layout (location = ${1 /* NORM */}) in vec2 aNorm;
+layout (location = ${1 /* DIR */}) in vec2 aDir;
 
 uniform mat4 uModelViewMatrix;
 uniform mat4 uProjectionMatrix;
@@ -11,7 +11,9 @@ uniform float uLineWidth;
 
 void main() {
     vec4 cssPose = uModelViewMatrix * vec4(aDataPoint, 0.0, 1.0);
-    gl_Position = uProjectionMatrix * (cssPose + vec4(aNorm * uLineWidth, 0.0, 0.0));
+    vec4 dir = uModelViewMatrix * vec4(aDir, 0.0, 0.0);
+    dir = normalize(dir);
+    gl_Position = uProjectionMatrix * (cssPose + vec4(-dir.y, dir.x, 0.0, 0.0) * uLineWidth);
 }
 `;
 const fsSource = `#version 300 es
@@ -53,8 +55,8 @@ class VertexArray {
         gl.bufferData(gl.ARRAY_BUFFER, BUFFER_CAPACITY * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
         gl.enableVertexAttribArray(0 /* DATA_POINT */);
         gl.vertexAttribPointer(0 /* DATA_POINT */, 2, gl.FLOAT, false, BYTES_PER_POINT, 0);
-        gl.enableVertexAttribArray(1 /* NORM */);
-        gl.vertexAttribPointer(1 /* NORM */, 2, gl.FLOAT, false, BYTES_PER_POINT, 2 * Float32Array.BYTES_PER_ELEMENT);
+        gl.enableVertexAttribArray(1 /* DIR */);
+        gl.vertexAttribPointer(1 /* DIR */, 2, gl.FLOAT, false, BYTES_PER_POINT, 2 * Float32Array.BYTES_PER_ELEMENT);
     }
     bind() {
         this.gl.bindVertexArray(this.vao);
@@ -84,19 +86,16 @@ class VertexArray {
         let bi = 0;
         const vDP = vec2.create();
         const vPreviousDP = vec2.create();
-        const dir = vec2.create();
-        const norm1 = vec2.create();
-        const norm2 = vec2.create();
+        const dir1 = vec2.create();
+        const dir2 = vec2.create();
         function calc(dp, previousDP) {
             vDP[0] = dp.x;
             vDP[1] = dp.y;
             vPreviousDP[0] = previousDP.x;
             vPreviousDP[1] = previousDP.y;
-            vec2.subtract(dir, vDP, vPreviousDP);
-            vec2.normalize(dir, dir);
-            norm1[0] = -dir[1];
-            norm1[1] = dir[0];
-            vec2.negate(norm2, norm1);
+            vec2.subtract(dir1, vDP, vPreviousDP);
+            vec2.normalize(dir1, dir1);
+            vec2.negate(dir2, dir1);
         }
         function put(v) {
             buffer[bi] = v[0];
@@ -109,17 +108,17 @@ class VertexArray {
             calc(dp, previousDP);
             previousDP = dp;
             for (const dp of [vPreviousDP, vDP]) {
-                for (const norm of [norm1, norm2]) {
+                for (const dir of [dir1, dir2]) {
                     put(dp);
-                    put(norm);
+                    put(dir);
                 }
             }
         }
         if (isOverflow) {
             calc(dataPoints[start + numDPtoAdd], previousDP);
-            for (const norm of [norm1, norm2]) {
+            for (const dir of [dir1, dir2]) {
                 put(vPreviousDP);
-                put(norm);
+                put(dir);
             }
         }
         const gl = this.gl;
@@ -196,7 +195,7 @@ export class LineChartRenderer {
         this.program.use();
     }
     syncBuffer() {
-        for (const s of this.model.series) {
+        for (const s of this.options.series) {
             let a = this.arrays.get(s);
             if (!a) {
                 a = new SeriesVertexArray(this.gl, s);
@@ -224,9 +223,9 @@ export class LineChartRenderer {
         this.syncDomain();
         const gl = this.gl;
         for (const [ds, arr] of this.arrays) {
-            const color = resolveColorRGBA(ds.options.color);
+            const color = resolveColorRGBA(ds.color);
             gl.uniform4fv(this.program.locations.uColor, color);
-            const lineWidth = (_a = ds.options.lineWidth, (_a !== null && _a !== void 0 ? _a : this.options.lineWidth));
+            const lineWidth = (_a = ds.lineWidth, (_a !== null && _a !== void 0 ? _a : this.options.lineWidth));
             gl.uniform1f(this.program.locations.uLineWidth, lineWidth / 2);
             arr.draw();
         }

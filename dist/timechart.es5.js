@@ -10,7 +10,7 @@ class RenderModel {
         this.yScale = scaleLinear();
         this.xAutoInitized = false;
         this.yAutoInitized = false;
-        this.series = [];
+        this.seriesInfo = new Map();
         if (options.xRange !== 'auto') {
             this.xScale.domain([options.xRange.min, options.xRange.max]);
         }
@@ -24,7 +24,14 @@ class RenderModel {
         this.yScale.range([op.paddingTop, height - op.paddingBottom]);
     }
     update() {
-        const series = this.series.filter(s => s.data.length > 0);
+        for (const s of this.options.series) {
+            if (!this.seriesInfo.has(s)) {
+                this.seriesInfo.set(s, {
+                    yRangeUpdatedIndex: 0,
+                });
+            }
+        }
+        const series = this.options.series.filter(s => s.data.length > 0);
         if (series.length === 0) {
             return;
         }
@@ -37,17 +44,26 @@ class RenderModel {
             this.xAutoInitized = true;
         }
         if (this.options.yRange === 'auto') {
-            let minDomain = Math.min(...series.map(s => Math.min(...s.data.slice(s.yRangeUpdatedIndex).map(d => d.y))));
-            let maxDomain = Math.max(...series.map(s => Math.max(...s.data.slice(s.yRangeUpdatedIndex).map(d => d.y))));
+            const minMax = series.map(s => {
+                const newY = s.data.slice(this.seriesInfo.get(s).yRangeUpdatedIndex).map(d => d.y);
+                return {
+                    min: Math.min(...newY),
+                    max: Math.max(...newY),
+                };
+            });
             if (this.yAutoInitized) {
                 const origDomain = this.yScale.domain();
-                minDomain = Math.min(origDomain[1], minDomain);
-                maxDomain = Math.max(origDomain[0], maxDomain);
+                minMax.push({
+                    min: origDomain[1],
+                    max: origDomain[0],
+                });
             }
+            const minDomain = Math.min(...minMax.map(s => s.min));
+            const maxDomain = Math.max(...minMax.map(s => s.max));
             this.yScale.domain([maxDomain, minDomain]).nice();
             this.yAutoInitized = true;
-            for (const s of this.series) {
-                s.yRangeUpdatedIndex = s.data.length;
+            for (const s of series) {
+                this.seriesInfo.get(s).yRangeUpdatedIndex = s.data.length;
             }
         }
     }
@@ -530,11 +546,11 @@ function resolveColorRGBA(color) {
 var VertexAttribLocations;
 (function (VertexAttribLocations) {
     VertexAttribLocations[VertexAttribLocations["DATA_POINT"] = 0] = "DATA_POINT";
-    VertexAttribLocations[VertexAttribLocations["NORM"] = 1] = "NORM";
+    VertexAttribLocations[VertexAttribLocations["DIR"] = 1] = "DIR";
 })(VertexAttribLocations || (VertexAttribLocations = {}));
 const vsSource = `#version 300 es
 layout (location = ${VertexAttribLocations.DATA_POINT}) in vec2 aDataPoint;
-layout (location = ${VertexAttribLocations.NORM}) in vec2 aNorm;
+layout (location = ${VertexAttribLocations.DIR}) in vec2 aDir;
 
 uniform mat4 uModelViewMatrix;
 uniform mat4 uProjectionMatrix;
@@ -542,7 +558,9 @@ uniform float uLineWidth;
 
 void main() {
     vec4 cssPose = uModelViewMatrix * vec4(aDataPoint, 0.0, 1.0);
-    gl_Position = uProjectionMatrix * (cssPose + vec4(aNorm * uLineWidth, 0.0, 0.0));
+    vec4 dir = uModelViewMatrix * vec4(aDir, 0.0, 0.0);
+    dir = normalize(dir);
+    gl_Position = uProjectionMatrix * (cssPose + vec4(-dir.y, dir.x, 0.0, 0.0) * uLineWidth);
 }
 `;
 const fsSource = `#version 300 es
@@ -584,8 +602,8 @@ class VertexArray {
         gl.bufferData(gl.ARRAY_BUFFER, BUFFER_CAPACITY * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
         gl.enableVertexAttribArray(VertexAttribLocations.DATA_POINT);
         gl.vertexAttribPointer(VertexAttribLocations.DATA_POINT, 2, gl.FLOAT, false, BYTES_PER_POINT, 0);
-        gl.enableVertexAttribArray(VertexAttribLocations.NORM);
-        gl.vertexAttribPointer(VertexAttribLocations.NORM, 2, gl.FLOAT, false, BYTES_PER_POINT, 2 * Float32Array.BYTES_PER_ELEMENT);
+        gl.enableVertexAttribArray(VertexAttribLocations.DIR);
+        gl.vertexAttribPointer(VertexAttribLocations.DIR, 2, gl.FLOAT, false, BYTES_PER_POINT, 2 * Float32Array.BYTES_PER_ELEMENT);
     }
     bind() {
         this.gl.bindVertexArray(this.vao);
@@ -615,19 +633,16 @@ class VertexArray {
         let bi = 0;
         const vDP = create$2();
         const vPreviousDP = create$2();
-        const dir = create$2();
-        const norm1 = create$2();
-        const norm2 = create$2();
+        const dir1 = create$2();
+        const dir2 = create$2();
         function calc(dp, previousDP) {
             vDP[0] = dp.x;
             vDP[1] = dp.y;
             vPreviousDP[0] = previousDP.x;
             vPreviousDP[1] = previousDP.y;
-            subtract$1(dir, vDP, vPreviousDP);
-            normalize(dir, dir);
-            norm1[0] = -dir[1];
-            norm1[1] = dir[0];
-            negate(norm2, norm1);
+            subtract$1(dir1, vDP, vPreviousDP);
+            normalize(dir1, dir1);
+            negate(dir2, dir1);
         }
         function put(v) {
             buffer[bi] = v[0];
@@ -640,17 +655,17 @@ class VertexArray {
             calc(dp, previousDP);
             previousDP = dp;
             for (const dp of [vPreviousDP, vDP]) {
-                for (const norm of [norm1, norm2]) {
+                for (const dir of [dir1, dir2]) {
                     put(dp);
-                    put(norm);
+                    put(dir);
                 }
             }
         }
         if (isOverflow) {
             calc(dataPoints[start + numDPtoAdd], previousDP);
-            for (const norm of [norm1, norm2]) {
+            for (const dir of [dir1, dir2]) {
                 put(vPreviousDP);
-                put(norm);
+                put(dir);
             }
         }
         const gl = this.gl;
@@ -727,7 +742,7 @@ class LineChartRenderer {
         this.program.use();
     }
     syncBuffer() {
-        for (const s of this.model.series) {
+        for (const s of this.options.series) {
             let a = this.arrays.get(s);
             if (!a) {
                 a = new SeriesVertexArray(this.gl, s);
@@ -755,9 +770,9 @@ class LineChartRenderer {
         this.syncDomain();
         const gl = this.gl;
         for (const [ds, arr] of this.arrays) {
-            const color = resolveColorRGBA(ds.options.color);
+            const color = resolveColorRGBA(ds.color);
             gl.uniform4fv(this.program.locations.uColor, color);
-            const lineWidth = (_a = ds.options.lineWidth, (_a !== null && _a !== void 0 ? _a : this.options.lineWidth));
+            const lineWidth = (_a = ds.lineWidth, (_a !== null && _a !== void 0 ? _a : this.options.lineWidth));
             gl.uniform1f(this.program.locations.uLineWidth, lineWidth / 2);
             arr.draw();
         }
@@ -859,8 +874,10 @@ const defaultSeriesOptions = {
 };
 class TimeChart {
     constructor(el, options) {
+        var _a, _b, _c;
         this.el = el;
-        const resolvedOptions = Object.assign(Object.assign({}, defaultOptions), options);
+        const series = (_c = (_b = (_a = options) === null || _a === void 0 ? void 0 : _a.series) === null || _b === void 0 ? void 0 : _b.map(s => (Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s))), (_c !== null && _c !== void 0 ? _c : []));
+        const resolvedOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
         this.options = resolvedOptions;
         this.renderModel = new RenderModel(resolvedOptions);
         this.canvasLayer = new CanvasLayer(el, resolvedOptions);
@@ -881,14 +898,6 @@ class TimeChart {
         this.renderModel.update();
         this.svgLayer.update();
         this.lineChartRenderer.drawFrame();
-    }
-    addDataSeries(data, options) {
-        const resolvedOptions = Object.assign(Object.assign({}, defaultSeriesOptions), options);
-        this.renderModel.series.push({
-            data,
-            options: resolvedOptions,
-            yRangeUpdatedIndex: 0,
-        });
     }
 }
 

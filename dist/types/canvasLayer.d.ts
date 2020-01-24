@@ -1,8 +1,8 @@
-import { TimeChartOptions } from './options';
+import { ResolvedOptions } from './options';
 export declare class CanvasLayer {
     canvas: HTMLCanvasElement;
     gl: WebGL2RenderingContext;
-    constructor(el: HTMLElement, options: TimeChartOptions);
+    constructor(el: HTMLElement, options: ResolvedOptions);
     onResize(): void;
     clear(): void;
 }

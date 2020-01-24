@@ -21,8 +21,10 @@ const defaultSeriesOptions = {
 };
 export default class TimeChart {
     constructor(el, options) {
+        var _a, _b, _c;
         this.el = el;
-        const resolvedOptions = Object.assign(Object.assign({}, defaultOptions), options);
+        const series = (_c = (_b = (_a = options) === null || _a === void 0 ? void 0 : _a.series) === null || _b === void 0 ? void 0 : _b.map(s => (Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s))), (_c !== null && _c !== void 0 ? _c : []));
+        const resolvedOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
         this.options = resolvedOptions;
         this.renderModel = new RenderModel(resolvedOptions);
         this.canvasLayer = new CanvasLayer(el, resolvedOptions);
@@ -43,14 +45,6 @@ export default class TimeChart {
         this.renderModel.update();
         this.svgLayer.update();
         this.lineChartRenderer.drawFrame();
-    }
-    addDataSeries(data, options) {
-        const resolvedOptions = Object.assign(Object.assign({}, defaultSeriesOptions), options);
-        this.renderModel.series.push({
-            data,
-            options: resolvedOptions,
-            yRangeUpdatedIndex: 0,
-        });
     }
 }
 //# sourceMappingURL=index.js.map

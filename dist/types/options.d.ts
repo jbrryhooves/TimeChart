@@ -1,6 +1,7 @@
 import { ColorSpaceObject, ColorCommonInstance } from 'd3-color';
+import { DataPoint } from './renderModel';
 declare type ColorSpecifier = ColorSpaceObject | ColorCommonInstance | string;
-export interface TimeChartOptions {
+interface TimeChartOptionsBase {
     lineWidth: number;
     backgroundColor: ColorSpecifier;
     paddingLeft: number;
@@ -22,7 +23,14 @@ export interface TimeChartOptions {
      **/
     baseTime: number;
 }
+export interface TimeChartOptions extends Partial<TimeChartOptionsBase> {
+    series?: Partial<TimeChartSeriesOptions>[];
+}
+export interface ResolvedOptions extends TimeChartOptionsBase {
+    series: TimeChartSeriesOptions[];
+}
 export interface TimeChartSeriesOptions {
+    data: DataPoint[];
     lineWidth?: number;
     name: string;
     color: ColorSpecifier;
