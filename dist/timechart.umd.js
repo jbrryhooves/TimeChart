@@ -103,6 +103,7 @@
             if (this.redrawRequested) {
                 return;
             }
+            this.redrawRequested = true;
             requestAnimationFrame((time) => {
                 this.redrawRequested = false;
                 this.update();
