@@ -192,6 +192,7 @@ export class LineChartRenderer {
         this.program = new LineChartWebGLProgram(this.gl);
         this.arrays = new Map();
         this.height = 0;
+        model.onUpdate(() => this.drawFrame());
         this.program.use();
     }
     syncBuffer() {
@@ -237,8 +238,8 @@ export class LineChartRenderer {
         const m = this.model;
         const gl = this.gl;
         const baseTime = this.options.baseTime;
-        const zero = vec3.fromValues(m.xScale(baseTime), this.ySvgToCanvas(m.yScale(0)), 0);
-        const one = vec3.fromValues(m.xScale(baseTime + 1), this.ySvgToCanvas(m.yScale(1)), 0);
+        const zero = [m.xScale(baseTime), this.ySvgToCanvas(m.yScale(0)), 0];
+        const one = [m.xScale(baseTime + 1), this.ySvgToCanvas(m.yScale(1)), 0];
         const modelViewMatrix = mat4.create();
         const scaling = vec3.create();
         vec3.subtract(scaling, one, zero);

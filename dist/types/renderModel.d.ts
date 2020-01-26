@@ -3,6 +3,7 @@ export interface DataPoint {
     x: number;
     y: number;
 }
+declare type UpdateCallback = () => void;
 export declare class RenderModel {
     private options;
     xScale: import("d3-scale").ScaleTime<number, number>;
@@ -11,6 +12,11 @@ export declare class RenderModel {
     private yAutoInitized;
     private seriesInfo;
     constructor(options: ResolvedOptions);
-    onResize(width: number, height: number): void;
+    resize(width: number, height: number): void;
+    private updateCallbacks;
+    onUpdate(callback: UpdateCallback): void;
     update(): void;
+    private redrawRequested;
+    requestRedraw(): void;
 }
+export {};

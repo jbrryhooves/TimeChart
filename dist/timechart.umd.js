@@ -1,9 +1,20 @@
 (function (global, factory) {
-    typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('d3-color'), require('d3-scale'), require('d3-axis'), require('d3-selection')) :
-    typeof define === 'function' && define.amd ? define(['d3-color', 'd3-scale', 'd3-axis', 'd3-selection'], factory) :
-    (global = global || self, global.TimeChart = factory(global.d3, global.d3, global.d3, global.d3));
-}(this, (function (d3Color, d3Scale, d3Axis, d3Selection) { 'use strict';
+    typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('d3-color'), require('d3-scale'), require('d3-axis'), require('d3-selection'), require('d3-zoom')) :
+    typeof define === 'function' && define.amd ? define(['d3-color', 'd3-scale', 'd3-axis', 'd3-selection', 'd3-zoom'], factory) :
+    (global = global || self, global.TimeChart = factory(global.d3, global.d3, global.d3, global.d3, global.d3));
+}(this, (function (d3Color, d3Scale, d3Axis, d3Selection, d3Zoom) { 'use strict';
 
+    function maxMin(arr) {
+        let max = -Infinity;
+        let min = Infinity;
+        for (const v of arr) {
+            if (v > max)
+                max = v;
+            if (v < min)
+                min = v;
+        }
+        return { max, min };
+    }
     class RenderModel {
         constructor(options) {
             this.options = options;
@@ -12,17 +23,22 @@
             this.xAutoInitized = false;
             this.yAutoInitized = false;
             this.seriesInfo = new Map();
-            if (options.xRange !== 'auto') {
+            this.updateCallbacks = [];
+            this.redrawRequested = false;
+            if (options.xRange !== 'auto' && options.xRange) {
                 this.xScale.domain([options.xRange.min, options.xRange.max]);
             }
-            if (options.yRange !== 'auto') {
+            if (options.yRange !== 'auto' && options.yRange) {
                 this.yScale.domain([options.yRange.min, options.yRange.max]);
             }
         }
-        onResize(width, height) {
+        resize(width, height) {
             const op = this.options;
             this.xScale.range([op.paddingLeft, width - op.paddingRight]);
             this.yScale.range([op.paddingTop, height - op.paddingBottom]);
+        }
+        onUpdate(callback) {
+            this.updateCallbacks.push(callback);
         }
         update() {
             for (const s of this.options.series) {
@@ -36,37 +52,61 @@
             if (series.length === 0) {
                 return;
             }
-            if (this.options.xRange === 'auto') {
+            const opXRange = this.options.xRange;
+            const opYRange = this.options.yRange;
+            if (this.options.realTime || opXRange === 'auto') {
                 const maxDomain = this.options.baseTime + Math.max(...series.map(s => s.data[s.data.length - 1].x));
-                const minDomain = this.xAutoInitized ?
-                    this.xScale.domain()[0] :
-                    this.options.baseTime + Math.min(...series.map(s => s.data[0].x));
-                this.xScale.domain([minDomain, maxDomain]);
-                this.xAutoInitized = true;
+                if (this.options.realTime) {
+                    const currentDomain = this.xScale.domain();
+                    const range = currentDomain[1].getTime() - currentDomain[0].getTime();
+                    this.xScale.domain([maxDomain - range, maxDomain]);
+                }
+                else { // Auto
+                    const minDomain = this.xAutoInitized ?
+                        this.xScale.domain()[0] :
+                        this.options.baseTime + Math.min(...series.map(s => s.data[0].x));
+                    this.xScale.domain([minDomain, maxDomain]);
+                    this.xAutoInitized = true;
+                }
             }
-            if (this.options.yRange === 'auto') {
-                const minMax = series.map(s => {
+            else if (opXRange) {
+                this.xScale.domain([opXRange.min, opXRange.max]);
+            }
+            if (opYRange === 'auto') {
+                const maxMinY = series.map(s => {
                     const newY = s.data.slice(this.seriesInfo.get(s).yRangeUpdatedIndex).map(d => d.y);
-                    return {
-                        min: Math.min(...newY),
-                        max: Math.max(...newY),
-                    };
+                    return maxMin(newY);
                 });
                 if (this.yAutoInitized) {
                     const origDomain = this.yScale.domain();
-                    minMax.push({
+                    maxMinY.push({
                         min: origDomain[1],
                         max: origDomain[0],
                     });
                 }
-                const minDomain = Math.min(...minMax.map(s => s.min));
-                const maxDomain = Math.max(...minMax.map(s => s.max));
+                const minDomain = Math.min(...maxMinY.map(s => s.min));
+                const maxDomain = Math.max(...maxMinY.map(s => s.max));
                 this.yScale.domain([maxDomain, minDomain]).nice();
                 this.yAutoInitized = true;
                 for (const s of series) {
                     this.seriesInfo.get(s).yRangeUpdatedIndex = s.data.length;
                 }
             }
+            else if (opYRange) {
+                this.yScale.domain([opYRange.max, opYRange.min]);
+            }
+            for (const cb of this.updateCallbacks) {
+                cb();
+            }
+        }
+        requestRedraw() {
+            if (this.redrawRequested) {
+                return;
+            }
+            requestAnimationFrame((time) => {
+                this.redrawRequested = false;
+                this.update();
+            });
         }
     }
 
@@ -268,22 +308,6 @@
       return out;
     }
     /**
-     * Creates a new vec3 initialized with the given values
-     *
-     * @param {Number} x X component
-     * @param {Number} y Y component
-     * @param {Number} z Z component
-     * @returns {vec3} a new 3D vector
-     */
-
-    function fromValues(x, y, z) {
-      var out = new ARRAY_TYPE(3);
-      out[0] = x;
-      out[1] = y;
-      out[2] = z;
-      return out;
-    }
-    /**
      * Subtracts vector b from vector a
      *
      * @param {vec3} out the receiving vector
@@ -373,7 +397,7 @@
      * @returns {vec2} a new 2D vector
      */
 
-    function fromValues$1(x, y) {
+    function fromValues(x, y) {
       var out = new ARRAY_TYPE(2);
       out[0] = x;
       out[1] = y;
@@ -740,6 +764,7 @@ void main() {
             this.program = new LineChartWebGLProgram(this.gl);
             this.arrays = new Map();
             this.height = 0;
+            model.onUpdate(() => this.drawFrame());
             this.program.use();
         }
         syncBuffer() {
@@ -754,7 +779,7 @@ void main() {
         }
         onResize(width, height) {
             this.height = height;
-            const scale = fromValues$1(width, height);
+            const scale = fromValues(width, height);
             divide(scale, scale, [2, 2]);
             inverse(scale, scale);
             const translate = create();
@@ -785,8 +810,8 @@ void main() {
             const m = this.model;
             const gl = this.gl;
             const baseTime = this.options.baseTime;
-            const zero = fromValues(m.xScale(baseTime), this.ySvgToCanvas(m.yScale(0)), 0);
-            const one = fromValues(m.xScale(baseTime + 1), this.ySvgToCanvas(m.yScale(1)), 0);
+            const zero = [m.xScale(baseTime), this.ySvgToCanvas(m.yScale(0)), 0];
+            const one = [m.xScale(baseTime + 1), this.ySvgToCanvas(m.yScale(1)), 0];
             const modelViewMatrix = create();
             const scaling = create$1();
             subtract(scaling, one, zero);
@@ -799,7 +824,8 @@ void main() {
     }
 
     class CanvasLayer {
-        constructor(el, options) {
+        constructor(el, options, model) {
+            model.onUpdate(() => this.clear());
             el.style.position = 'relative';
             const canvas = document.createElement('canvas');
             canvas.style.width = '100%';
@@ -835,6 +861,7 @@ void main() {
             this.model = model;
             this.xAxis = d3Axis.axisBottom(this.model.xScale);
             this.yAxis = d3Axis.axisLeft(this.model.yScale);
+            model.onUpdate(() => this.update());
             el.style.position = 'relative';
             const svg = d3Selection.select(el).append('svg')
                 .style('position', 'absolute')
@@ -843,6 +870,20 @@ void main() {
             this.svgNode = svg.node();
             this.xg = svg.append('g');
             this.yg = svg.append('g');
+            const xBeforeZoom = model.xScale;
+            const zoomed = () => {
+                const trans = d3Selection.event.transform;
+                model.xScale = trans.rescaleX(xBeforeZoom);
+                this.xAxis.scale(model.xScale);
+                options.xRange = null;
+                options.realTime = false;
+                model.requestRedraw();
+            };
+            if (options.zoom) {
+                const z = d3Zoom.zoom()
+                    .on('zoom', zoomed);
+                svg.call(z); // TODO: Workaround type check.
+            }
         }
         update() {
             this.xg.call(this.xAxis);
@@ -867,6 +908,7 @@ void main() {
         xRange: 'auto',
         yRange: 'auto',
         realTime: false,
+        zoom: true,
         baseTime: 0,
     };
     const defaultSeriesOptions = {
@@ -881,7 +923,7 @@ void main() {
             const resolvedOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
             this.options = resolvedOptions;
             this.renderModel = new RenderModel(resolvedOptions);
-            this.canvasLayer = new CanvasLayer(el, resolvedOptions);
+            this.canvasLayer = new CanvasLayer(el, resolvedOptions, this.renderModel);
             this.svgLayer = new SVGLayer(el, resolvedOptions, this.renderModel);
             this.lineChartRenderer = new LineChartRenderer(this.renderModel, this.canvasLayer.gl, resolvedOptions);
             this.onResize();
@@ -889,16 +931,13 @@ void main() {
         }
         onResize() {
             const canvas = this.canvasLayer.canvas;
-            this.renderModel.onResize(canvas.clientWidth, canvas.clientHeight);
+            this.renderModel.resize(canvas.clientWidth, canvas.clientHeight);
             this.svgLayer.onResize();
             this.canvasLayer.onResize();
             this.lineChartRenderer.onResize(canvas.clientWidth, canvas.clientHeight);
         }
         update() {
-            this.canvasLayer.clear();
-            this.renderModel.update();
-            this.svgLayer.update();
-            this.lineChartRenderer.drawFrame();
+            this.renderModel.requestRedraw();
         }
     }
 

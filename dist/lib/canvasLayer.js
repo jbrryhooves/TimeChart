@@ -1,6 +1,7 @@
 import { resolveColorRGBA } from './options';
 export class CanvasLayer {
-    constructor(el, options) {
+    constructor(el, options, model) {
+        model.onUpdate(() => this.clear());
         el.style.position = 'relative';
         const canvas = document.createElement('canvas');
         canvas.style.width = '100%';

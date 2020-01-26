@@ -13,6 +13,7 @@ const defaultOptions = {
     xRange: 'auto',
     yRange: 'auto',
     realTime: false,
+    zoom: true,
     baseTime: 0,
 };
 const defaultSeriesOptions = {
@@ -27,7 +28,7 @@ export default class TimeChart {
         const resolvedOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
         this.options = resolvedOptions;
         this.renderModel = new RenderModel(resolvedOptions);
-        this.canvasLayer = new CanvasLayer(el, resolvedOptions);
+        this.canvasLayer = new CanvasLayer(el, resolvedOptions, this.renderModel);
         this.svgLayer = new SVGLayer(el, resolvedOptions, this.renderModel);
         this.lineChartRenderer = new LineChartRenderer(this.renderModel, this.canvasLayer.gl, resolvedOptions);
         this.onResize();
@@ -35,16 +36,13 @@ export default class TimeChart {
     }
     onResize() {
         const canvas = this.canvasLayer.canvas;
-        this.renderModel.onResize(canvas.clientWidth, canvas.clientHeight);
+        this.renderModel.resize(canvas.clientWidth, canvas.clientHeight);
         this.svgLayer.onResize();
         this.canvasLayer.onResize();
         this.lineChartRenderer.onResize(canvas.clientWidth, canvas.clientHeight);
     }
     update() {
-        this.canvasLayer.clear();
-        this.renderModel.update();
-        this.svgLayer.update();
-        this.lineChartRenderer.drawFrame();
+        this.renderModel.requestRedraw();
     }
 }
 //# sourceMappingURL=index.js.map
