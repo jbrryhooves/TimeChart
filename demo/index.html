@@ -9,6 +9,7 @@
         #chart {
             width: 100%;
             height: 640px;
+            max-height: 90vh;
         }
         .size-ref {
             display: inline-block;
@@ -21,6 +22,7 @@
 <body>
     <h1>TimeChart Demo</h1>
     <h2>1000 points / second adding to chart.</h2>
+    <p><span id="point-count">0</span> Points</p>
     <div id="chart"></div>
     <button id="stop-btn">Stop</button>
     <p>
@@ -45,6 +47,12 @@
     <script src="https://d3js.org/d3-scale.v3.js"></script>
     <script src="https://d3js.org/d3-selection.v1.js"></script>
     <script src="https://d3js.org/d3-axis.v1.js"></script>
+    <script src="https://d3js.org/d3-dispatch.v1.js"></script>
+    <script src="https://d3js.org/d3-ease.v1.js"></script>
+    <script src="https://d3js.org/d3-timer.v1.js"></script>
+    <script src="https://d3js.org/d3-transition.v1.js"></script>
+    <script src="https://d3js.org/d3-drag.v1.js"></script>
+    <script src="https://d3js.org/d3-zoom.v1.js"></script>
 
     <script src="../dist/timechart.umd.js"></script>
     <script src="./demo.js"></script>

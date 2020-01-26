@@ -10,6 +10,18 @@ export interface DataPoint {
     y: number;
 }
 
+function maxMin(arr: number[]) {
+    let max = -Infinity;
+    let min = Infinity;
+    for (const v of arr) {
+        if (v > max) max = v;
+        if (v < min) min = v;
+    }
+    return { max, min };
+}
+
+type UpdateCallback = () => void;
+
 export class RenderModel {
     public xScale = scaleTime();
     public yScale = scaleLinear();
@@ -18,18 +30,23 @@ export class RenderModel {
     private seriesInfo = new Map<TimeChartSeriesOptions, DataSeriesInfo>();
 
     constructor(private options: ResolvedOptions) {
-        if (options.xRange !== 'auto') {
+        if (options.xRange !== 'auto' && options.xRange) {
             this.xScale.domain([options.xRange.min, options.xRange.max])
         }
-        if (options.yRange !== 'auto') {
+        if (options.yRange !== 'auto' && options.yRange) {
             this.yScale.domain([options.yRange.min, options.yRange.max])
         }
     }
 
-    onResize(width: number, height: number) {
+    resize(width: number, height: number) {
         const op = this.options;
         this.xScale.range([op.paddingLeft, width - op.paddingRight]);
         this.yScale.range([op.paddingTop, height - op.paddingBottom]);
+    }
+
+    private updateCallbacks = [] as UpdateCallback[];
+    onUpdate(callback: UpdateCallback) {
+        this.updateCallbacks.push(callback);
     }
 
     update() {
@@ -45,37 +62,64 @@ export class RenderModel {
         if (series.length === 0) {
             return;
         }
-        if (this.options.xRange === 'auto') {
+
+        const opXRange = this.options.xRange;
+        const opYRange = this.options.yRange;
+
+        if (this.options.realTime || opXRange === 'auto') {
             const maxDomain = this.options.baseTime + Math.max(...series.map(s => s.data[s.data.length - 1].x));
-            const minDomain = this.xAutoInitized ?
-                this.xScale.domain()[0] :
-                this.options.baseTime + Math.min(...series.map(s => s.data[0].x));
-            this.xScale.domain([minDomain, maxDomain]);
-            this.xAutoInitized = true;
+            if (this.options.realTime) {
+                const currentDomain = this.xScale.domain();
+                const range = currentDomain[1].getTime() - currentDomain[0].getTime();
+                this.xScale.domain([maxDomain - range, maxDomain]);
+            } else { // Auto
+                const minDomain = this.xAutoInitized ?
+                    this.xScale.domain()[0] :
+                    this.options.baseTime + Math.min(...series.map(s => s.data[0].x));
+                this.xScale.domain([minDomain, maxDomain]);
+                this.xAutoInitized = true;
+            }
+        } else if (opXRange) {
+            this.xScale.domain([opXRange.min, opXRange.max])
         }
-        if (this.options.yRange === 'auto') {
-            const minMax = series.map(s => {
+
+        if (opYRange === 'auto') {
+            const maxMinY = series.map(s => {
                 const newY = s.data.slice(this.seriesInfo.get(s)!.yRangeUpdatedIndex).map(d => d.y)
-                return {
-                    min: Math.min(...newY),
-                    max: Math.max(...newY),
-                }
+                return maxMin(newY);
             })
             if (this.yAutoInitized) {
                 const origDomain = this.yScale.domain();
-                minMax.push({
+                maxMinY.push({
                     min: origDomain[1],
                     max: origDomain[0],
                 });
             }
-            const minDomain = Math.min(...minMax.map(s => s.min));
-            const maxDomain = Math.max(...minMax.map(s => s.max));
+            const minDomain = Math.min(...maxMinY.map(s => s.min));
+            const maxDomain = Math.max(...maxMinY.map(s => s.max));
 
             this.yScale.domain([maxDomain, minDomain]).nice();
             this.yAutoInitized = true;
             for (const s of series) {
                 this.seriesInfo.get(s)!.yRangeUpdatedIndex = s.data.length;
             }
+        } else if (opYRange) {
+            this.yScale.domain([opYRange.max, opYRange.min])
         }
+
+        for (const cb of this.updateCallbacks) {
+            cb();
+        }
+    }
+
+    private redrawRequested = false;
+    requestRedraw() {
+        if (this.redrawRequested) {
+            return;
+        }
+        requestAnimationFrame((time) => {
+            this.redrawRequested = false;
+            this.update();
+        });
     }
 }
