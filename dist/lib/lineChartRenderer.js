@@ -1,5 +1,6 @@
 import { vec2, vec3, mat4 } from 'gl-matrix';
 import { LinkedWebGLProgram, throwIfFalsy } from './webGLUtils';
+import { domainSearch } from './utils';
 import { resolveColorRGBA } from './options';
 const vsSource = `#version 300 es
 layout (location = ${0 /* DATA_POINT */}) in vec2 aDataPoint;
@@ -45,8 +46,13 @@ const BYTES_PER_POINT = INDEX_PER_POINT * Float32Array.BYTES_PER_ELEMENT;
 const BUFFER_DATA_POINT_CAPACITY = 128 * 1024;
 const BUFFER_CAPACITY = BUFFER_DATA_POINT_CAPACITY * INDEX_PER_DATAPOINT + 2 * POINT_PER_DATAPOINT;
 class VertexArray {
-    constructor(gl) {
+    /**
+     * @param firstDataPointIndex At least 1, since datapoint 0 has no path to draw.
+     */
+    constructor(gl, dataPoints, firstDataPointIndex) {
         this.gl = gl;
+        this.dataPoints = dataPoints;
+        this.firstDataPointIndex = firstDataPointIndex;
         this.length = 0;
         this.vao = throwIfFalsy(gl.createVertexArray());
         this.bind();
@@ -70,10 +76,11 @@ class VertexArray {
         this.gl.deleteVertexArray(this.vao);
     }
     /**
-     * @param start At least 1, since datapoint 0 has no path to draw.
      * @returns Next data point index, or `dataPoints.length` if all data added.
      */
-    addDataPoints(dataPoints, start) {
+    addDataPoints() {
+        const dataPoints = this.dataPoints;
+        const start = this.firstDataPointIndex + this.length;
         const remainDPCapacity = BUFFER_DATA_POINT_CAPACITY - this.length;
         const remainDPCount = dataPoints.length - start;
         const isOverflow = remainDPCapacity < remainDPCount;
@@ -127,12 +134,21 @@ class VertexArray {
         this.length += numDPtoAdd;
         return start + numDPtoAdd;
     }
-    draw() {
+    draw(renderIndex) {
+        const first = Math.max(0, renderIndex.min - this.firstDataPointIndex);
+        const last = Math.min(this.length, renderIndex.max - this.firstDataPointIndex);
+        const count = last - first;
         const gl = this.gl;
         this.bind();
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.length * POINT_PER_DATAPOINT);
+        gl.drawArrays(gl.TRIANGLE_STRIP, first * POINT_PER_DATAPOINT, count * POINT_PER_DATAPOINT);
     }
 }
+/**
+ * An array of `VertexArray` to represent a series
+ *
+ * `series.data`  index: 0  [1 ... C] [C+1 ... 2C] ... (C = `BUFFER_DATA_POINT_CAPACITY`)
+ * `vertexArrays` index:     0         1           ...
+ */
 class SeriesVertexArray {
     constructor(gl, series) {
         this.gl = gl;
@@ -143,22 +159,19 @@ class SeriesVertexArray {
         let activeArray;
         let bufferedDataPointNum = 1;
         const newArray = () => {
-            activeArray = new VertexArray(this.gl);
-            this.vertexArrays.push({
-                array: activeArray,
-                firstDataPointIndex: bufferedDataPointNum,
-            });
+            activeArray = new VertexArray(this.gl, this.series.data, bufferedDataPointNum);
+            this.vertexArrays.push(activeArray);
         };
         if (this.vertexArrays.length > 0) {
             const lastVertexArray = this.vertexArrays[this.vertexArrays.length - 1];
-            bufferedDataPointNum = lastVertexArray.firstDataPointIndex + lastVertexArray.array.length;
+            bufferedDataPointNum = lastVertexArray.firstDataPointIndex + lastVertexArray.length;
             if (bufferedDataPointNum > this.series.data.length) {
                 throw new Error('remove data unsupported.');
             }
             if (bufferedDataPointNum === this.series.data.length) {
                 return;
             }
-            activeArray = lastVertexArray.array;
+            activeArray = lastVertexArray;
         }
         else if (this.series.data.length >= 2) {
             newArray();
@@ -168,7 +181,7 @@ class SeriesVertexArray {
             return; // Not enough data
         }
         while (true) {
-            bufferedDataPointNum = activeArray.addDataPoints(this.series.data, bufferedDataPointNum);
+            bufferedDataPointNum = activeArray.addDataPoints();
             if (bufferedDataPointNum >= this.series.data.length) {
                 if (bufferedDataPointNum > this.series.data.length) {
                     throw Error('Assertion failed.');
@@ -178,9 +191,19 @@ class SeriesVertexArray {
             newArray();
         }
     }
-    draw() {
-        for (const a of this.vertexArrays) {
-            a.array.draw();
+    draw(renderDomain) {
+        const data = this.series.data;
+        if (data.length === 0 || data[0].x > renderDomain.max || data[data.length - 1].x < renderDomain.min) {
+            return;
+        }
+        const key = (d) => d.x;
+        const minIndex = domainSearch(data, 1, data.length, renderDomain.min, key);
+        const maxIndex = domainSearch(data, minIndex, data.length - 1, renderDomain.max, key) + 1;
+        const minArrayIndex = Math.floor((minIndex - 1) / BUFFER_DATA_POINT_CAPACITY);
+        const maxArrayIndex = Math.ceil((maxIndex - 1) / BUFFER_DATA_POINT_CAPACITY);
+        const renderIndex = { min: minIndex, max: maxIndex };
+        for (let i = minArrayIndex; i < maxArrayIndex; i++) {
+            this.vertexArrays[i].draw(renderIndex);
         }
     }
 }
@@ -192,6 +215,7 @@ export class LineChartRenderer {
         this.program = new LineChartWebGLProgram(this.gl);
         this.arrays = new Map();
         this.height = 0;
+        this.width = 0;
         model.onUpdate(() => this.drawFrame());
         this.program.use();
     }
@@ -207,6 +231,7 @@ export class LineChartRenderer {
     }
     onResize(width, height) {
         this.height = height;
+        this.width = width;
         const scale = vec2.fromValues(width, height);
         vec2.divide(scale, scale, [2, 2]);
         vec2.inverse(scale, scale);
@@ -228,7 +253,11 @@ export class LineChartRenderer {
             gl.uniform4fv(this.program.locations.uColor, color);
             const lineWidth = (_a = ds.lineWidth, (_a !== null && _a !== void 0 ? _a : this.options.lineWidth));
             gl.uniform1f(this.program.locations.uLineWidth, lineWidth / 2);
-            arr.draw();
+            const renderDomain = {
+                min: this.model.xScale.invert(-lineWidth / 2).getTime() - this.options.baseTime,
+                max: this.model.xScale.invert(this.width + lineWidth / 2).getTime() - this.options.baseTime,
+            };
+            arr.draw(renderDomain);
         }
     }
     ySvgToCanvas(v) {

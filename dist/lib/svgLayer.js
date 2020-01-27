@@ -19,6 +19,7 @@ export class SVGLayer {
         const xBeforeZoom = model.xScale;
         const zoomed = () => {
             const trans = event.transform;
+            xBeforeZoom.range(model.xScale.range());
             model.xScale = trans.rescaleX(xBeforeZoom);
             this.xAxis.scale(model.xScale);
             options.xRange = null;
