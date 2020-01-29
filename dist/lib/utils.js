@@ -17,11 +17,10 @@ export function domainSearch(data, start, end, value, key) {
         let expectedIndex = Math.ceil(start + ratio * (end - start));
         if (expectedIndex === end)
             expectedIndex--;
+        else if (expectedIndex === start)
+            expectedIndex++;
         const domain = key(data[expectedIndex]);
-        if (domain === value) {
-            return expectedIndex;
-        }
-        else if (domain < value) {
+        if (domain < value) {
             start = expectedIndex;
         }
         else {
@@ -29,5 +28,8 @@ export function domainSearch(data, start, end, value, key) {
         }
     }
     return end;
+}
+export function zip(...rows) {
+    return [...rows[0]].map((_, c) => rows.map(row => row[c]));
 }
 //# sourceMappingURL=utils.js.map
