@@ -1,4 +1,4 @@
-import { scaleTime, scaleLinear } from "d3-scale";
+import { scaleLinear } from "d3-scale";
 function maxMin(arr) {
     let max = -Infinity;
     let min = Infinity;
@@ -13,7 +13,7 @@ function maxMin(arr) {
 export class RenderModel {
     constructor(options) {
         this.options = options;
-        this.xScale = scaleTime();
+        this.xScale = scaleLinear();
         this.yScale = scaleLinear();
         this.xAutoInitized = false;
         this.yAutoInitized = false;
@@ -50,16 +50,16 @@ export class RenderModel {
         const opXRange = this.options.xRange;
         const opYRange = this.options.yRange;
         if (this.options.realTime || opXRange === 'auto') {
-            const maxDomain = this.options.baseTime + Math.max(...series.map(s => s.data[s.data.length - 1].x));
+            const maxDomain = Math.max(...series.map(s => s.data[s.data.length - 1].x));
             if (this.options.realTime) {
                 const currentDomain = this.xScale.domain();
-                const range = currentDomain[1].getTime() - currentDomain[0].getTime();
+                const range = currentDomain[1] - currentDomain[0];
                 this.xScale.domain([maxDomain - range, maxDomain]);
             }
             else { // Auto
                 const minDomain = this.xAutoInitized ?
                     this.xScale.domain()[0] :
-                    this.options.baseTime + Math.min(...series.map(s => s.data[0].x));
+                    Math.min(...series.map(s => s.data[0].x));
                 this.xScale.domain([minDomain, maxDomain]);
                 this.xAutoInitized = true;
             }

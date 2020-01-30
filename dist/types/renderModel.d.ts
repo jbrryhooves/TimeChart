@@ -6,7 +6,7 @@ export interface DataPoint {
 declare type UpdateCallback = () => void;
 export declare class RenderModel {
     private options;
-    xScale: import("d3-scale").ScaleTime<number, number>;
+    xScale: import("d3-scale").ScaleLinear<number, number>;
     yScale: import("d3-scale").ScaleLinear<number, number>;
     private xAutoInitized;
     private yAutoInitized;

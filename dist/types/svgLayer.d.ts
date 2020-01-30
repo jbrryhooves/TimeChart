@@ -6,7 +6,7 @@ export declare class SVGLayer {
     private model;
     xg: Selection<SVGGElement, unknown, null, undefined>;
     yg: Selection<SVGGElement, unknown, null, undefined>;
-    xAxis: import("d3-axis").Axis<number | Date | {
+    xAxis: import("d3-axis").Axis<number | {
         valueOf(): number;
     }>;
     yAxis: import("d3-axis").Axis<number | {

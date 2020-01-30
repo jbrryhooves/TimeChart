@@ -1,4 +1,5 @@
 import { axisBottom, axisLeft } from "d3-axis";
+import { scaleTime } from 'd3-scale';
 import { select } from "d3-selection";
 export class SVGLayer {
     constructor(el, options, model) {
@@ -17,6 +18,11 @@ export class SVGLayer {
         this.yg = svg.append('g');
     }
     update() {
+        const xs = this.model.xScale;
+        const xts = scaleTime()
+            .domain(xs.domain().map(d => d + this.options.baseTime))
+            .range(xs.range());
+        this.xAxis.scale(xts);
         this.xg.call(this.xAxis);
         this.yg.call(this.yAxis);
     }

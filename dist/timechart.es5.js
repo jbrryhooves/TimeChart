@@ -1,5 +1,5 @@
 import { rgb } from 'd3-color';
-import { scaleTime, scaleLinear } from 'd3-scale';
+import { scaleLinear, scaleTime } from 'd3-scale';
 import { axisBottom, axisLeft } from 'd3-axis';
 import { select } from 'd3-selection';
 
@@ -17,7 +17,7 @@ function maxMin(arr) {
 class RenderModel {
     constructor(options) {
         this.options = options;
-        this.xScale = scaleTime();
+        this.xScale = scaleLinear();
         this.yScale = scaleLinear();
         this.xAutoInitized = false;
         this.yAutoInitized = false;
@@ -54,16 +54,16 @@ class RenderModel {
         const opXRange = this.options.xRange;
         const opYRange = this.options.yRange;
         if (this.options.realTime || opXRange === 'auto') {
-            const maxDomain = this.options.baseTime + Math.max(...series.map(s => s.data[s.data.length - 1].x));
+            const maxDomain = Math.max(...series.map(s => s.data[s.data.length - 1].x));
             if (this.options.realTime) {
                 const currentDomain = this.xScale.domain();
-                const range = currentDomain[1].getTime() - currentDomain[0].getTime();
+                const range = currentDomain[1] - currentDomain[0];
                 this.xScale.domain([maxDomain - range, maxDomain]);
             }
             else { // Auto
                 const minDomain = this.xAutoInitized ?
                     this.xScale.domain()[0] :
-                    this.options.baseTime + Math.min(...series.map(s => s.data[0].x));
+                    Math.min(...series.map(s => s.data[0].x));
                 this.xScale.domain([minDomain, maxDomain]);
                 this.xAutoInitized = true;
             }
@@ -860,8 +860,8 @@ class LineChartRenderer {
             const lineWidth = (_a = ds.lineWidth, (_a !== null && _a !== void 0 ? _a : this.options.lineWidth));
             gl.uniform1f(this.program.locations.uLineWidth, lineWidth / 2);
             const renderDomain = {
-                min: this.model.xScale.invert(-lineWidth / 2).getTime() - this.options.baseTime,
-                max: this.model.xScale.invert(this.width + lineWidth / 2).getTime() - this.options.baseTime,
+                min: this.model.xScale.invert(-lineWidth / 2),
+                max: this.model.xScale.invert(this.width + lineWidth / 2),
             };
             arr.draw(renderDomain);
         }
@@ -872,9 +872,8 @@ class LineChartRenderer {
     syncDomain() {
         const m = this.model;
         const gl = this.gl;
-        const baseTime = this.options.baseTime;
-        const zero = [m.xScale(baseTime), this.ySvgToCanvas(m.yScale(0)), 0];
-        const one = [m.xScale(baseTime + 1), this.ySvgToCanvas(m.yScale(1)), 0];
+        const zero = [m.xScale(0), this.ySvgToCanvas(m.yScale(0)), 0];
+        const one = [m.xScale(1), this.ySvgToCanvas(m.yScale(1)), 0];
         const modelViewMatrix = create();
         const scaling = create$1();
         subtract(scaling, one, zero);
@@ -935,6 +934,11 @@ class SVGLayer {
         this.yg = svg.append('g');
     }
     update() {
+        const xs = this.model.xScale;
+        const xts = scaleTime()
+            .domain(xs.domain().map(d => d + this.options.baseTime))
+            .range(xs.range());
+        this.xAxis.scale(xts);
         this.xg.call(this.xAxis);
         this.yg.call(this.yAxis);
     }
@@ -20868,21 +20872,21 @@ class ChartZoom {
         this.el.style.touchAction = actions.join(' ');
     }
     touchPoints(touches) {
-        const axis = [
-            ['clientX', DIRECTION.X],
-            ['clientY', DIRECTION.Y],
-        ];
+        const boundingBox = this.el.getBoundingClientRect();
+        const ts = new Map([...touches].map(t => [t.identifier, {
+                [DIRECTION.X]: t.clientX - boundingBox.left,
+                [DIRECTION.Y]: t.clientY - boundingBox.top,
+            }]));
         let changed = false;
-        const ts = [...touches];
-        for (const [pProp, dir] of axis) {
+        for (const dir of [DIRECTION.X, DIRECTION.Y]) {
             const op = this.dirOptions(dir);
             if (op === undefined) {
                 continue;
             }
             const scale = op.scale;
-            const temp = ts.map(t => ({ current: t[pProp], previousPoint: this.previousPoints.get(t.identifier) }))
+            const temp = [...ts.entries()].map(([id, p]) => ({ current: p[dir], previousPoint: this.previousPoints.get(id) }))
                 .filter(t => t.previousPoint !== undefined)
-                .map(({ current, previousPoint }) => ({ current, domain: +scale.invert(previousPoint[pProp]) }));
+                .map(({ current, previousPoint }) => ({ current, domain: scale.invert(previousPoint[dir]) }));
             if (temp.length === 0) {
                 continue;
             }
@@ -20901,7 +20905,7 @@ class ChartZoom {
                 // Pan only
                 const domain = scale.domain();
                 const range = scale.range();
-                k = (+domain[1] - +domain[0]) / (range[1] - range[0]);
+                k = (domain[1] - domain[0]) / (range[1] - range[0]);
                 console.log(k);
                 b = mean(temp.map(t => t.domain - k * t.current));
             }
@@ -20910,10 +20914,7 @@ class ChartZoom {
                 changed = true;
             }
         }
-        this.previousPoints = new Map(ts.map(t => [t.identifier, {
-                clientX: t.clientX,
-                clientY: t.clientY,
-            }]));
+        this.previousPoints = ts;
         if (changed) {
             for (const cb of this.updateCallbacks) {
                 cb();
@@ -20937,7 +20938,7 @@ class ChartZoom {
         const eps = extent * 1e-6;
         const previousDomain = op.scale.domain();
         op.scale.domain(domain);
-        if (zip(domain, previousDomain).some(([d, pd]) => Math.abs(d - +pd) > eps)) {
+        if (zip(domain, previousDomain).some(([d, pd]) => Math.abs(d - pd) > eps)) {
             return true;
         }
         return false;
@@ -21008,13 +21009,14 @@ class TimeChart {
     }
     registerZoom() {
         if (this.options.zoom) {
+            const DAY = 24 * 3600 * 1000;
             const z = new ChartZoom(this.el, {
                 x: {
                     scale: this.model.xScale,
-                    minDomain: 0,
-                    maxDomain: (new Date(2100, 0, 1)).getTime(),
+                    minDomain: -60 * 1000,
+                    maxDomain: 10 * 365 * DAY,
                     minDomainExtent: 50,
-                    maxDomainExtent: 10 * 365 * 24 * 3600 * 1000,
+                    maxDomainExtent: 1 * 365 * DAY,
                 }
             });
             this.model.onUpdate(() => z.update());

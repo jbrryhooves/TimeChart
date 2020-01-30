@@ -1,13 +1,13 @@
-import { ScaleLinear, ScaleTime } from 'd3-scale';
+import { ScaleLinear } from 'd3-scale';
 interface AxisOptions {
-    scale: ScaleLinear<number, number> | ScaleTime<number, number>;
+    scale: ScaleLinear<number, number>;
     minDomain?: number;
     maxDomain?: number;
     minDomainExtent?: number;
     maxDomainExtent?: number;
 }
 interface ResolvedAxisOptions {
-    scale: ScaleLinear<number, number> | ScaleTime<number, number>;
+    scale: ScaleLinear<number, number>;
     minDomain: number;
     maxDomain: number;
     minDomainExtent: number;
@@ -21,7 +21,7 @@ interface ChartZoomOptions {
     x?: AxisOptions;
     y?: AxisOptions;
 }
-interface CapableElement extends ElementCSSInlineStyle {
+interface CapableElement extends Element, ElementCSSInlineStyle {
     addEventListener<K extends keyof GlobalEventHandlersEventMap>(type: K, listener: (this: CapableElement, ev: GlobalEventHandlersEventMap[K]) => any, options?: boolean | AddEventListenerOptions): void;
 }
 declare type UpdateCallback = () => void;
