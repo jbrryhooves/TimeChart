@@ -988,7 +988,7 @@ void main() {
             sumXX += p.x * p.x;
         }
         const det = (len * sumXX) - (sumX * sumX);
-        const k = det === 0 ? 0 : (len * sumXY) - (sumX * sumY);
+        const k = det === 0 ? 0 : ((len * sumXY) - (sumX * sumY)) / det;
         const b = (sumY - k * sumX) / len;
         return { k, b };
     }
@@ -1076,7 +1076,7 @@ void main() {
                     const domain = scale.domain();
                     const range = scale.range();
                     k = (domain[1] - domain[0]) / (range[1] - range[0]);
-                    b = temp.map(t => t.domain - k * t.current).reduce((a, b) => a + b);
+                    b = temp.map(t => t.domain - k * t.current).reduce((a, b) => a + b) / temp.length;
                 }
                 const domain = scale.range().map(r => b + k * r);
                 if (this.applyNewDomain(dir, domain)) {
@@ -1125,7 +1125,7 @@ void main() {
             if (this.majorDirection === DIRECTION.UNKNOWN && event.touches.length >= 2) {
                 const ts = [...event.touches];
                 function vari(data) {
-                    const mean = data.reduce((a, b) => a + b);
+                    const mean = data.reduce((a, b) => a + b) / data.length;
                     return data.map(d => (d - mean) ** 2).reduce((a, b) => a + b);
                 }
                 const varX = vari(ts.map(t => t.clientX));
