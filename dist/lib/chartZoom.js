@@ -1,4 +1,3 @@
-import { matrix, multiply, transpose, inv, variance, mean } from 'mathjs';
 import { zip } from './utils';
 var DIRECTION;
 (function (DIRECTION) {
@@ -13,6 +12,34 @@ const defaultAxisOptions = {
     minDomainExtent: 0,
     maxDomainExtent: Infinity,
 };
+/**
+ * least squares
+ *
+ * beta^T = [b, k]
+ * X = [[1, x_1],
+ *      [1, x_2],
+ *      [1, x_3], ...]
+ * Y^T = [y_1, y_2, y_3, ...]
+ * beta = (X^T X)^(-1) X^T Y
+ * @returns `{k, b}`
+ */
+function linearRegression(data) {
+    let sumX = 0;
+    let sumY = 0;
+    let sumXY = 0;
+    let sumXX = 0;
+    const len = data.length;
+    for (const p of data) {
+        sumX += p.x;
+        sumY += p.y;
+        sumXY += p.x * p.y;
+        sumXX += p.x * p.x;
+    }
+    const det = (len * sumXX) - (sumX * sumX);
+    const k = det === 0 ? 0 : (len * sumXY) - (sumX * sumY);
+    const b = (sumY - k * sumX) / len;
+    return { k, b };
+}
 export class ChartZoom {
     constructor(el, options) {
         this.el = el;
@@ -88,22 +115,16 @@ export class ChartZoom {
             }
             let k, b;
             if (dir === this.majorDirection && temp.length >= 2) {
-                // linear least squares
-                // beta = (X^T X)^(-1) X^T Y
-                const X = matrix(temp.map(t => [1, t.current]));
-                const XT = transpose(X);
-                const Y = matrix(temp.map(t => t.domain));
-                const beta = multiply(multiply(inv(multiply(XT, X)), XT), Y);
-                b = beta.get([0]);
-                k = beta.get([1]);
+                const res = linearRegression(temp.map(t => ({ x: t.current, y: t.domain })));
+                k = res.k;
+                b = res.b;
             }
             else {
                 // Pan only
                 const domain = scale.domain();
                 const range = scale.range();
                 k = (domain[1] - domain[0]) / (range[1] - range[0]);
-                console.log(k);
-                b = mean(temp.map(t => t.domain - k * t.current));
+                b = temp.map(t => t.domain - k * t.current).reduce((a, b) => a + b);
             }
             const domain = scale.range().map(r => b + k * r);
             if (this.applyNewDomain(dir, domain)) {
@@ -151,8 +172,12 @@ export class ChartZoom {
     onTouchStart(event) {
         if (this.majorDirection === DIRECTION.UNKNOWN && event.touches.length >= 2) {
             const ts = [...event.touches];
-            const varX = variance(ts.map(t => t.clientX));
-            const varY = variance(ts.map(t => t.clientY));
+            function vari(data) {
+                const mean = data.reduce((a, b) => a + b);
+                return data.map(d => (d - mean) ** 2).reduce((a, b) => a + b);
+            }
+            const varX = vari(ts.map(t => t.clientX));
+            const varY = vari(ts.map(t => t.clientY));
             this.majorDirection = varX > varY ? DIRECTION.X : DIRECTION.Y;
             if (this.dirOptions(this.majorDirection) === undefined) {
                 this.majorDirection = DIRECTION.UNKNOWN;
