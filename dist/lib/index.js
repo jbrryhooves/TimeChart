@@ -49,7 +49,7 @@ export default class TimeChart {
                 }
             });
             this.model.onUpdate(() => z.update());
-            z.onUpdate(() => {
+            z.onScaleUpdated(() => {
                 this.options.xRange = null;
                 this.options.realTime = false;
                 this.update();

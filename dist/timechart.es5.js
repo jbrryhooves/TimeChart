@@ -594,8 +594,18 @@ function domainSearch(data, start, end, value, key) {
     }
     return end;
 }
-function zip(...rows) {
-    return [...rows[0]].map((_, c) => rows.map(row => row[c]));
+class EventDispatcher {
+    constructor() {
+        this.callbacks = [];
+    }
+    on(callback) {
+        this.callbacks.push(callback);
+    }
+    dispatch(...args) {
+        for (const cb of this.callbacks) {
+            cb(...args);
+        }
+    }
 }
 
 function resolveColorRGBA(color) {
@@ -951,18 +961,6 @@ class SVGLayer {
     }
 }
 
-var DIRECTION;
-(function (DIRECTION) {
-    DIRECTION[DIRECTION["UNKNOWN"] = 0] = "UNKNOWN";
-    DIRECTION[DIRECTION["X"] = 1] = "X";
-    DIRECTION[DIRECTION["Y"] = 2] = "Y";
-})(DIRECTION || (DIRECTION = {}));
-const defaultAxisOptions = {
-    minDomain: -Infinity,
-    maxDomain: Infinity,
-    minDomainExtent: 0,
-    maxDomainExtent: Infinity,
-};
 /**
  * least squares
  *
@@ -991,25 +989,40 @@ function linearRegression(data) {
     const b = (sumY - k * sumX) / len;
     return { k, b };
 }
-class ChartZoom {
+function scaleK(scale) {
+    const domain = scale.domain();
+    const range = scale.range();
+    return (domain[1] - domain[0]) / (range[1] - range[0]);
+}
+
+var DIRECTION;
+(function (DIRECTION) {
+    DIRECTION[DIRECTION["UNKNOWN"] = 0] = "UNKNOWN";
+    DIRECTION[DIRECTION["X"] = 1] = "X";
+    DIRECTION[DIRECTION["Y"] = 2] = "Y";
+})(DIRECTION || (DIRECTION = {}));
+function dirOptions(options) {
+    return [
+        { dir: DIRECTION.X, op: options.x },
+        { dir: DIRECTION.Y, op: options.y },
+    ].filter(i => i.op !== undefined);
+}
+
+class ChartZoomTouch {
     constructor(el, options) {
         this.el = el;
+        this.options = options;
+        this.scaleUpdated = new EventDispatcher();
         this.majorDirection = DIRECTION.UNKNOWN;
         this.previousPoints = new Map();
         this.enabled = {
             [DIRECTION.X]: false,
             [DIRECTION.Y]: false,
         };
-        this.updateCallbacks = [];
-        el.addEventListener('touchstart', e => this.onTouchStart(e));
-        el.addEventListener('touchend', e => this.onTouchEnd(e));
-        el.addEventListener('touchcancel', e => this.onTouchEnd(e));
-        el.addEventListener('touchmove', e => this.onTouchMove(e));
-        options = (options !== null && options !== void 0 ? options : {});
-        this.options = {
-            x: options.x && Object.assign(Object.assign({}, defaultAxisOptions), options.x),
-            y: options.y && Object.assign(Object.assign({}, defaultAxisOptions), options.y),
-        };
+        el.addEventListener('touchstart', e => this.onTouchStart(e), { passive: true });
+        el.addEventListener('touchend', e => this.onTouchEnd(e), { passive: true });
+        el.addEventListener('touchcancel', e => this.onTouchEnd(e), { passive: true });
+        el.addEventListener('touchmove', e => this.onTouchMove(e), { passive: true });
         this.update();
     }
     update() {
@@ -1017,12 +1030,7 @@ class ChartZoom {
         this.syncTouchAction();
     }
     syncEnabled() {
-        const dirs = [
-            ['x', DIRECTION.X],
-            ['y', DIRECTION.Y],
-        ];
-        for (const [opDir, dir] of dirs) {
-            const op = this.options[opDir];
+        for (const { dir, op } of dirOptions(this.options)) {
             if (!op) {
                 this.enabled[dir] = false;
             }
@@ -1052,11 +1060,7 @@ class ChartZoom {
                 [DIRECTION.Y]: t.clientY - boundingBox.top,
             }]));
         let changed = false;
-        for (const dir of [DIRECTION.X, DIRECTION.Y]) {
-            const op = this.dirOptions(dir);
-            if (op === undefined) {
-                continue;
-            }
+        for (const { dir, op } of dirOptions(this.options)) {
             const scale = op.scale;
             const temp = [...ts.entries()].map(([id, p]) => ({ current: p[dir], previousPoint: this.previousPoints.get(id) }))
                 .filter(t => t.previousPoint !== undefined)
@@ -1072,47 +1076,18 @@ class ChartZoom {
             }
             else {
                 // Pan only
-                const domain = scale.domain();
-                const range = scale.range();
-                k = (domain[1] - domain[0]) / (range[1] - range[0]);
+                k = scaleK(scale);
                 b = temp.map(t => t.domain - k * t.current).reduce((a, b) => a + b) / temp.length;
             }
             const domain = scale.range().map(r => b + k * r);
-            if (this.applyNewDomain(dir, domain)) {
-                changed = true;
-            }
+            op.scale.domain(domain);
+            changed = true;
         }
         this.previousPoints = ts;
         if (changed) {
-            for (const cb of this.updateCallbacks) {
-                cb();
-            }
+            this.scaleUpdated.dispatch();
         }
         return changed;
-    }
-    /**
-     * @returns If domain changed
-     */
-    applyNewDomain(dir, domain) {
-        const op = this.dirOptions(dir);
-        const inExtent = domain[1] - domain[0];
-        const extent = Math.min(op.maxDomainExtent, Math.max(op.minDomainExtent, inExtent));
-        const deltaE = (extent - inExtent) / 2;
-        domain[0] -= deltaE;
-        domain[1] += deltaE;
-        const deltaO = Math.min(Math.max(op.minDomain - domain[0], 0), op.maxDomain - domain[1]);
-        domain[0] += deltaO;
-        domain[1] += deltaO;
-        const eps = extent * 1e-6;
-        const previousDomain = op.scale.domain();
-        op.scale.domain(domain);
-        if (zip(domain, previousDomain).some(([d, pd]) => Math.abs(d - pd) > eps)) {
-            return true;
-        }
-        return false;
-    }
-    onUpdate(callback) {
-        this.updateCallbacks.push(callback);
     }
     dirOptions(dir) {
         return {
@@ -1144,6 +1119,186 @@ class ChartZoom {
     }
     onTouchMove(event) {
         this.touchPoints(event.touches);
+    }
+}
+
+class ChartZoomWheel {
+    constructor(el, options) {
+        this.el = el;
+        this.options = options;
+        this.scaleUpdated = new EventDispatcher();
+        el.addEventListener('wheel', ev => this.onWheel(ev));
+    }
+    onWheel(event) {
+        event.preventDefault();
+        let deltaX = event.deltaX;
+        let deltaY = event.deltaY;
+        switch (event.deltaMode) {
+            case 1: // line
+                deltaX *= 30;
+                deltaY *= 30;
+                break;
+            case 2: // page
+                deltaX *= 400;
+                deltaY *= 400;
+                break;
+        }
+        const transform = {
+            [DIRECTION.X]: {
+                translate: 0,
+                zoom: 0,
+            },
+            [DIRECTION.Y]: {
+                translate: 0,
+                zoom: 0,
+            }
+        };
+        if (event.ctrlKey) { // zoom
+            if (event.altKey) {
+                transform[DIRECTION.X].zoom = deltaX;
+                transform[DIRECTION.Y].zoom = deltaY;
+            }
+            else {
+                transform[DIRECTION.X].zoom = (deltaX + deltaY);
+            }
+        }
+        else { // translate
+            if (event.altKey) {
+                transform[DIRECTION.X].translate = deltaX;
+                transform[DIRECTION.Y].translate = deltaY;
+            }
+            else {
+                transform[DIRECTION.X].translate = (deltaX + deltaY);
+            }
+        }
+        const boundingRect = this.el.getBoundingClientRect();
+        const origin = {
+            [DIRECTION.X]: event.clientX - boundingRect.left,
+            [DIRECTION.Y]: event.clientY - boundingRect.right,
+        };
+        for (const { dir, op } of dirOptions(this.options)) {
+            const domain = op.scale.domain();
+            const k = scaleK(op.scale);
+            const trans = transform[dir];
+            const transOrigin = op.scale.invert(origin[dir]);
+            trans.translate *= k;
+            trans.zoom *= 0.003;
+            const newDomain = domain.map(d => d + trans.translate + (d - transOrigin) * trans.zoom);
+            op.scale.domain(newDomain);
+        }
+        this.scaleUpdated.dispatch();
+    }
+}
+
+class ChartZoomBoundary {
+    constructor(options) {
+        this.options = options;
+    }
+    enforceBondary() {
+        for (const { op } of dirOptions(this.options)) {
+            const domain = op.scale.domain();
+            const inExtent = domain[1] - domain[0];
+            const extent = Math.min(op.maxDomainExtent, Math.max(op.minDomainExtent, inExtent));
+            const deltaE = (extent - inExtent) / 2;
+            domain[0] -= deltaE;
+            domain[1] += deltaE;
+            const deltaO = Math.min(Math.max(op.minDomain - domain[0], 0), op.maxDomain - domain[1]);
+            domain[0] += deltaO;
+            domain[1] += deltaO;
+            op.scale.domain(domain);
+        }
+    }
+}
+
+class ChartZoomMouse {
+    constructor(el, options) {
+        this.el = el;
+        this.options = options;
+        this.scaleUpdated = new EventDispatcher();
+        this.previousPoint = null;
+        el.style.userSelect = 'none';
+        el.addEventListener('pointerdown', ev => this.onMouseDown(ev));
+        el.addEventListener('pointerup', ev => this.onMouseUp(ev));
+        el.addEventListener('pointermove', ev => this.onMouseMove(ev));
+    }
+    point(ev) {
+        const boundingRect = this.el.getBoundingClientRect();
+        return {
+            [DIRECTION.X]: ev.clientX - boundingRect.left,
+            [DIRECTION.Y]: ev.clientY - boundingRect.top,
+        };
+    }
+    onMouseMove(event) {
+        if (this.previousPoint === null) {
+            return;
+        }
+        const p = this.point(event);
+        let changed = false;
+        for (const { dir, op } of dirOptions(this.options)) {
+            const offset = p[dir] - this.previousPoint[dir];
+            const k = scaleK(op.scale);
+            const domain = op.scale.domain();
+            op.scale.domain(domain.map(d => d - k * offset));
+            changed = true;
+        }
+        this.previousPoint = p;
+        if (changed) {
+            this.scaleUpdated.dispatch();
+        }
+    }
+    onMouseDown(event) {
+        console.log(event.pointerType);
+        if (event.pointerType !== 'mouse') {
+            return;
+        }
+        this.el.setPointerCapture(event.pointerId);
+        this.previousPoint = this.point(event);
+        this.el.style.cursor = 'grabbing';
+    }
+    onMouseUp(event) {
+        if (this.previousPoint === null) {
+            return;
+        }
+        this.previousPoint = null;
+        this.el.releasePointerCapture(event.pointerId);
+        this.el.style.cursor = '';
+    }
+}
+
+const defaultAxisOptions = {
+    minDomain: -Infinity,
+    maxDomain: Infinity,
+    minDomainExtent: 0,
+    maxDomainExtent: Infinity,
+};
+class ChartZoom {
+    constructor(el, options) {
+        this.el = el;
+        this.scaleUpdated = new EventDispatcher();
+        options = (options !== null && options !== void 0 ? options : {});
+        this.options = {
+            x: options.x && Object.assign(Object.assign({}, defaultAxisOptions), options.x),
+            y: options.y && Object.assign(Object.assign({}, defaultAxisOptions), options.y),
+        };
+        this.touch = new ChartZoomTouch(el, this.options);
+        this.mouse = new ChartZoomMouse(el, this.options);
+        this.wheel = new ChartZoomWheel(el, this.options);
+        this.boundary = new ChartZoomBoundary(this.options);
+        const cb = () => this.dispatchScaleUpdated();
+        this.touch.scaleUpdated.on(cb);
+        this.mouse.scaleUpdated.on(cb);
+        this.wheel.scaleUpdated.on(cb);
+    }
+    dispatchScaleUpdated() {
+        this.boundary.enforceBondary();
+        this.scaleUpdated.dispatch();
+    }
+    onScaleUpdated(callback) {
+        this.scaleUpdated.on(callback);
+    }
+    /** Call this when scale updated outside */
+    update() {
+        this.touch.update();
     }
 }
 
@@ -1192,7 +1347,7 @@ class TimeChart {
                 }
             });
             this.model.onUpdate(() => z.update());
-            z.onUpdate(() => {
+            z.onScaleUpdated(() => {
                 this.options.xRange = null;
                 this.options.realTime = false;
                 this.update();

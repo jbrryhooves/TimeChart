@@ -29,7 +29,17 @@ export function domainSearch(data, start, end, value, key) {
     }
     return end;
 }
-export function zip(...rows) {
-    return [...rows[0]].map((_, c) => rows.map(row => row[c]));
+export class EventDispatcher {
+    constructor() {
+        this.callbacks = [];
+    }
+    on(callback) {
+        this.callbacks.push(callback);
+    }
+    dispatch(...args) {
+        for (const cb of this.callbacks) {
+            cb(...args);
+        }
+    }
 }
 //# sourceMappingURL=utils.js.map
