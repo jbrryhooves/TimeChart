@@ -962,6 +962,9 @@ void main() {
         }
     }
 
+    function zip(...rows) {
+        return [...rows[0]].map((_, c) => rows.map(row => row[c]));
+    }
     /**
      * least squares
      *
@@ -994,6 +997,43 @@ void main() {
         const domain = scale.domain();
         const range = scale.range();
         return (domain[1] - domain[0]) / (range[1] - range[0]);
+    }
+    /**
+     * @returns If domain changed
+     */
+    function applyNewDomain(op, domain) {
+        const inExtent = domain[1] - domain[0];
+        const previousDomain = op.scale.domain();
+        if ((previousDomain[1] - previousDomain[0]) * inExtent <= 0) {
+            // forbidden reverse direction.
+            return false;
+        }
+        const extent = Math.min(op.maxDomainExtent, Math.max(op.minDomainExtent, inExtent));
+        const deltaE = (extent - inExtent) / 2;
+        domain[0] -= deltaE;
+        domain[1] += deltaE;
+        const deltaO = Math.min(Math.max(op.minDomain - domain[0], 0), op.maxDomain - domain[1]);
+        domain[0] += deltaO;
+        domain[1] += deltaO;
+        const eps = extent * 1e-6;
+        op.scale.domain(domain);
+        if (zip(domain, previousDomain).some(([d, pd]) => Math.abs(d - pd) > eps)) {
+            return true;
+        }
+        return false;
+    }
+    function variance(data) {
+        const mean = data.reduce((a, b) => a + b) / data.length;
+        return data.map(d => (d - mean) ** 2).reduce((a, b) => a + b) / data.length;
+    }
+    function clamp(value, min, max) {
+        if (value > max) {
+            return max;
+        }
+        else if (value < min) {
+            return min;
+        }
+        return value;
     }
 
     var DIRECTION;
@@ -1054,6 +1094,19 @@ void main() {
             }
             this.el.style.touchAction = actions.join(' ');
         }
+        calcKB(dir, op, data) {
+            if (dir === this.majorDirection && data.length >= 2) {
+                const domain = op.scale.domain();
+                const extent = domain[1] - domain[0];
+                if (variance(data.map(d => d.domain)) > 1e-4 * extent * extent) {
+                    return linearRegression(data.map(t => ({ x: t.current, y: t.domain })));
+                }
+            }
+            // Pan only
+            const k = scaleK(op.scale);
+            const b = data.map(t => t.domain - k * t.current).reduce((a, b) => a + b) / data.length;
+            return { k, b };
+        }
         touchPoints(touches) {
             const boundingBox = this.el.getBoundingClientRect();
             const ts = new Map([...touches].map(t => [t.identifier, {
@@ -1069,20 +1122,11 @@ void main() {
                 if (temp.length === 0) {
                     continue;
                 }
-                let k, b;
-                if (dir === this.majorDirection && temp.length >= 2) {
-                    const res = linearRegression(temp.map(t => ({ x: t.current, y: t.domain })));
-                    k = res.k;
-                    b = res.b;
-                }
-                else {
-                    // Pan only
-                    k = scaleK(scale);
-                    b = temp.map(t => t.domain - k * t.current).reduce((a, b) => a + b) / temp.length;
-                }
+                const { k, b } = this.calcKB(dir, op, temp);
                 const domain = scale.range().map(r => b + k * r);
-                op.scale.domain(domain);
-                changed = true;
+                if (applyNewDomain(op, domain)) {
+                    changed = true;
+                }
             }
             this.previousPoints = ts;
             if (changed) {
@@ -1113,7 +1157,7 @@ void main() {
             this.touchPoints(event.touches);
         }
         onTouchEnd(event) {
-            if (event.touches.length === 0) {
+            if (event.touches.length < 2) {
                 this.majorDirection = DIRECTION.UNKNOWN;
             }
             this.touchPoints(event.touches);
@@ -1177,36 +1221,26 @@ void main() {
                 [DIRECTION.X]: event.clientX - boundingRect.left,
                 [DIRECTION.Y]: event.clientY - boundingRect.right,
             };
+            let changed = false;
             for (const { dir, op } of dirOptions(this.options)) {
                 const domain = op.scale.domain();
                 const k = scaleK(op.scale);
                 const trans = transform[dir];
                 const transOrigin = op.scale.invert(origin[dir]);
                 trans.translate *= k;
-                trans.zoom *= 0.003;
+                trans.zoom *= 0.002;
+                const extent = domain[1] - domain[0];
+                const translateCap = 0.4 * extent;
+                trans.translate = clamp(trans.translate, -translateCap, translateCap);
+                const zoomCap = 0.5;
+                trans.zoom = clamp(trans.zoom, -zoomCap, zoomCap);
                 const newDomain = domain.map(d => d + trans.translate + (d - transOrigin) * trans.zoom);
-                op.scale.domain(newDomain);
+                if (applyNewDomain(op, newDomain)) {
+                    changed = true;
+                }
             }
-            this.scaleUpdated.dispatch();
-        }
-    }
-
-    class ChartZoomBoundary {
-        constructor(options) {
-            this.options = options;
-        }
-        enforceBondary() {
-            for (const { op } of dirOptions(this.options)) {
-                const domain = op.scale.domain();
-                const inExtent = domain[1] - domain[0];
-                const extent = Math.min(op.maxDomainExtent, Math.max(op.minDomainExtent, inExtent));
-                const deltaE = (extent - inExtent) / 2;
-                domain[0] -= deltaE;
-                domain[1] += deltaE;
-                const deltaO = Math.min(Math.max(op.minDomain - domain[0], 0), op.maxDomain - domain[1]);
-                domain[0] += deltaO;
-                domain[1] += deltaO;
-                op.scale.domain(domain);
+            if (changed) {
+                this.scaleUpdated.dispatch();
             }
         }
     }
@@ -1239,8 +1273,10 @@ void main() {
                 const offset = p[dir] - this.previousPoint[dir];
                 const k = scaleK(op.scale);
                 const domain = op.scale.domain();
-                op.scale.domain(domain.map(d => d - k * offset));
-                changed = true;
+                const newDomain = domain.map(d => d - k * offset);
+                if (applyNewDomain(op, newDomain)) {
+                    changed = true;
+                }
             }
             this.previousPoint = p;
             if (changed) {
@@ -1248,7 +1284,6 @@ void main() {
             }
         }
         onMouseDown(event) {
-            console.log(event.pointerType);
             if (event.pointerType !== 'mouse') {
                 return;
             }
@@ -1284,14 +1319,12 @@ void main() {
             this.touch = new ChartZoomTouch(el, this.options);
             this.mouse = new ChartZoomMouse(el, this.options);
             this.wheel = new ChartZoomWheel(el, this.options);
-            this.boundary = new ChartZoomBoundary(this.options);
             const cb = () => this.dispatchScaleUpdated();
             this.touch.scaleUpdated.on(cb);
             this.mouse.scaleUpdated.on(cb);
             this.wheel.scaleUpdated.on(cb);
         }
         dispatchScaleUpdated() {
-            this.boundary.enforceBondary();
             this.scaleUpdated.dispatch();
         }
         onScaleUpdated(callback) {
@@ -1341,10 +1374,10 @@ void main() {
                 const z = new ChartZoom(this.el, {
                     x: {
                         scale: this.model.xScale,
-                        minDomain: -60 * 1000,
+                        minDomain: -DAY,
                         maxDomain: 10 * 365 * DAY,
                         minDomainExtent: 50,
-                        maxDomainExtent: 1 * 365 * DAY,
+                        maxDomainExtent: 2 * 365 * DAY,
                     }
                 });
                 this.model.onUpdate(() => z.update());

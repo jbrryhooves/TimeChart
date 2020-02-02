@@ -5,7 +5,6 @@ export declare class ChartZoom {
     private touch;
     private mouse;
     private wheel;
-    private boundary;
     private scaleUpdated;
     constructor(el: CapableElement, options?: ChartZoomOptions);
     private dispatchScaleUpdated;

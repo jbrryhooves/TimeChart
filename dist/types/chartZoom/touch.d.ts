@@ -11,6 +11,7 @@ export declare class ChartZoomTouch {
     update(): void;
     private syncEnabled;
     private syncTouchAction;
+    private calcKB;
     private touchPoints;
     private dirOptions;
     private onTouchStart;

@@ -1,4 +1,5 @@
 import { ScaleLinear } from 'd3-scale';
+import { ResolvedAxisOptions } from './options';
 export declare function zip<T1, T2>(...rows: [T1[], T2[]]): [T1, T2][];
 /**
  * least squares
@@ -19,3 +20,9 @@ export declare function linearRegression(data: {
     b: number;
 };
 export declare function scaleK(scale: ScaleLinear<number, number>): number;
+/**
+ * @returns If domain changed
+ */
+export declare function applyNewDomain(op: ResolvedAxisOptions, domain: number[]): boolean;
+export declare function variance(data: number[]): number;
+export declare function clamp(value: number, min: number, max: number): number;
