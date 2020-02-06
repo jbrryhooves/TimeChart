@@ -3,6 +3,51 @@ import { scaleLinear, scaleTime } from 'd3-scale';
 import { axisBottom, axisLeft } from 'd3-axis';
 import { select } from 'd3-selection';
 
+/** lower bound */
+function domainSearch(data, start, end, value, key) {
+    if (start >= end) {
+        return start;
+    }
+    if (value <= key(data[start])) {
+        return start;
+    }
+    if (value > key(data[end - 1])) {
+        return end;
+    }
+    end -= 1;
+    while (start + 1 < end) {
+        const minDomain = key(data[start]);
+        const maxDomain = key(data[end]);
+        const ratio = maxDomain <= minDomain ? 0 : (value - minDomain) / (maxDomain - minDomain);
+        let expectedIndex = Math.ceil(start + ratio * (end - start));
+        if (expectedIndex === end)
+            expectedIndex--;
+        else if (expectedIndex === start)
+            expectedIndex++;
+        const domain = key(data[expectedIndex]);
+        if (domain < value) {
+            start = expectedIndex;
+        }
+        else {
+            end = expectedIndex;
+        }
+    }
+    return end;
+}
+class EventDispatcher {
+    constructor() {
+        this.callbacks = [];
+    }
+    on(callback) {
+        this.callbacks.push(callback);
+    }
+    dispatch(...args) {
+        for (const cb of this.callbacks) {
+            cb(...args);
+        }
+    }
+}
+
 function maxMin(arr) {
     let max = -Infinity;
     let min = Infinity;
@@ -19,10 +64,10 @@ class RenderModel {
         this.options = options;
         this.xScale = scaleLinear();
         this.yScale = scaleLinear();
-        this.xAutoInitized = false;
-        this.yAutoInitized = false;
+        this.xRange = null;
+        this.yRange = null;
         this.seriesInfo = new Map();
-        this.updateCallbacks = [];
+        this.updated = new EventDispatcher();
         this.redrawRequested = false;
         if (options.xRange !== 'auto' && options.xRange) {
             this.xScale.domain([options.xRange.min, options.xRange.max]);
@@ -34,12 +79,10 @@ class RenderModel {
     resize(width, height) {
         const op = this.options;
         this.xScale.range([op.paddingLeft, width - op.paddingRight]);
-        this.yScale.range([op.paddingTop, height - op.paddingBottom]);
-    }
-    onUpdate(callback) {
-        this.updateCallbacks.push(callback);
+        this.yScale.range([height - op.paddingBottom, op.paddingTop]);
     }
     update() {
+        var _a, _b;
         for (const s of this.options.series) {
             if (!this.seriesInfo.has(s)) {
                 this.seriesInfo.set(s, {
@@ -53,50 +96,46 @@ class RenderModel {
         }
         const opXRange = this.options.xRange;
         const opYRange = this.options.yRange;
-        if (this.options.realTime || opXRange === 'auto') {
+        {
             const maxDomain = Math.max(...series.map(s => s.data[s.data.length - 1].x));
-            if (this.options.realTime) {
-                const currentDomain = this.xScale.domain();
-                const range = currentDomain[1] - currentDomain[0];
-                this.xScale.domain([maxDomain - range, maxDomain]);
+            const minDomain = (_b = (_a = this.xRange) === null || _a === void 0 ? void 0 : _a.min, (_b !== null && _b !== void 0 ? _b : Math.min(...series.map(s => s.data[0].x))));
+            this.xRange = { max: maxDomain, min: minDomain };
+            if (this.options.realTime || opXRange === 'auto') {
+                if (this.options.realTime) {
+                    const currentDomain = this.xScale.domain();
+                    const range = currentDomain[1] - currentDomain[0];
+                    this.xScale.domain([maxDomain - range, maxDomain]);
+                }
+                else { // Auto
+                    this.xScale.domain([minDomain, maxDomain]);
+                }
             }
-            else { // Auto
-                const minDomain = this.xAutoInitized ?
-                    this.xScale.domain()[0] :
-                    Math.min(...series.map(s => s.data[0].x));
-                this.xScale.domain([minDomain, maxDomain]);
-                this.xAutoInitized = true;
+            else if (opXRange) {
+                this.xScale.domain([opXRange.min, opXRange.max]);
             }
         }
-        else if (opXRange) {
-            this.xScale.domain([opXRange.min, opXRange.max]);
-        }
-        if (opYRange === 'auto') {
+        {
             const maxMinY = series.map(s => {
                 const newY = s.data.slice(this.seriesInfo.get(s).yRangeUpdatedIndex).map(d => d.y);
                 return maxMin(newY);
             });
-            if (this.yAutoInitized) {
-                const origDomain = this.yScale.domain();
-                maxMinY.push({
-                    min: origDomain[1],
-                    max: origDomain[0],
-                });
+            if (this.yRange) {
+                maxMinY.push(this.yRange);
             }
             const minDomain = Math.min(...maxMinY.map(s => s.min));
             const maxDomain = Math.max(...maxMinY.map(s => s.max));
-            this.yScale.domain([maxDomain, minDomain]).nice();
-            this.yAutoInitized = true;
-            for (const s of series) {
-                this.seriesInfo.get(s).yRangeUpdatedIndex = s.data.length;
+            this.yRange = { max: maxDomain, min: minDomain };
+            if (opYRange === 'auto') {
+                this.yScale.domain([minDomain, maxDomain]).nice();
+                for (const s of series) {
+                    this.seriesInfo.get(s).yRangeUpdatedIndex = s.data.length;
+                }
+            }
+            else if (opYRange) {
+                this.yScale.domain([opYRange.min, opYRange.max]);
             }
         }
-        else if (opYRange) {
-            this.yScale.domain([opYRange.max, opYRange.min]);
-        }
-        for (const cb of this.updateCallbacks) {
-            cb();
-        }
+        this.updated.dispatch();
     }
     requestRedraw() {
         if (this.redrawRequested) {
@@ -563,51 +602,6 @@ function throwIfFalsy(value) {
     return value;
 }
 
-/** lower bound */
-function domainSearch(data, start, end, value, key) {
-    if (start >= end) {
-        return start;
-    }
-    if (value <= key(data[start])) {
-        return start;
-    }
-    if (value > key(data[end - 1])) {
-        return end;
-    }
-    end -= 1;
-    while (start + 1 < end) {
-        const minDomain = key(data[start]);
-        const maxDomain = key(data[end]);
-        const ratio = maxDomain <= minDomain ? 0 : (value - minDomain) / (maxDomain - minDomain);
-        let expectedIndex = Math.ceil(start + ratio * (end - start));
-        if (expectedIndex === end)
-            expectedIndex--;
-        else if (expectedIndex === start)
-            expectedIndex++;
-        const domain = key(data[expectedIndex]);
-        if (domain < value) {
-            start = expectedIndex;
-        }
-        else {
-            end = expectedIndex;
-        }
-    }
-    return end;
-}
-class EventDispatcher {
-    constructor() {
-        this.callbacks = [];
-    }
-    on(callback) {
-        this.callbacks.push(callback);
-    }
-    dispatch(...args) {
-        for (const cb of this.callbacks) {
-            cb(...args);
-        }
-    }
-}
-
 function resolveColorRGBA(color) {
     const rgbColor = typeof color === 'string' ? rgb(color) : rgb(color);
     return [rgbColor.r / 255, rgbColor.g / 255, rgbColor.b / 255, rgbColor.opacity];
@@ -832,7 +826,7 @@ class LineChartRenderer {
         this.arrays = new Map();
         this.height = 0;
         this.width = 0;
-        model.onUpdate(() => this.drawFrame());
+        model.updated.on(() => this.drawFrame());
         this.program.use();
     }
     syncBuffer() {
@@ -897,7 +891,7 @@ class LineChartRenderer {
 
 class CanvasLayer {
     constructor(el, options, model) {
-        model.onUpdate(() => this.clear());
+        model.updated.on(() => this.clear());
         el.style.position = 'relative';
         const canvas = document.createElement('canvas');
         canvas.style.width = '100%';
@@ -933,7 +927,7 @@ class SVGLayer {
         this.model = model;
         this.xAxis = axisBottom(this.model.xScale);
         this.yAxis = axisLeft(this.model.yScale);
-        model.onUpdate(() => this.update());
+        model.updated.on(() => this.update());
         el.style.position = 'relative';
         const svg = select(el).append('svg')
             .style('position', 'absolute')
@@ -950,6 +944,7 @@ class SVGLayer {
             .range(xs.range());
         this.xAxis.scale(xts);
         this.xg.call(this.xAxis);
+        this.yAxis.scale(this.model.yScale);
         this.yg.call(this.yAxis);
     }
     onResize() {
@@ -1007,7 +1002,7 @@ function applyNewDomain(op, domain) {
         // forbidden reverse direction.
         return false;
     }
-    const extent = Math.min(op.maxDomainExtent, Math.max(op.minDomainExtent, inExtent));
+    const extent = Math.min(op.maxDomainExtent, op.maxDomain - op.minDomain, Math.max(op.minDomainExtent, inExtent));
     const deltaE = (extent - inExtent) / 2;
     domain[0] -= deltaE;
     domain[1] += deltaE;
@@ -1218,7 +1213,7 @@ class ChartZoomWheel {
         const boundingRect = this.el.getBoundingClientRect();
         const origin = {
             [DIRECTION.X]: event.clientX - boundingRect.left,
-            [DIRECTION.Y]: event.clientY - boundingRect.right,
+            [DIRECTION.Y]: event.clientY - boundingRect.top,
         };
         let changed = false;
         for (const { dir, op } of dirOptions(this.options)) {
@@ -1228,6 +1223,10 @@ class ChartZoomWheel {
             const transOrigin = op.scale.invert(origin[dir]);
             trans.translate *= k;
             trans.zoom *= 0.002;
+            if (event.shiftKey) {
+                trans.translate *= 5;
+                trans.zoom *= 5;
+            }
             const extent = domain[1] - domain[0];
             const translateCap = 0.4 * extent;
             trans.translate = clamp(trans.translate, -translateCap, translateCap);
@@ -1308,7 +1307,6 @@ const defaultAxisOptions = {
 };
 class ChartZoom {
     constructor(el, options) {
-        this.el = el;
         this.scaleUpdated = new EventDispatcher();
         options = (options !== null && options !== void 0 ? options : {});
         this.options = {
@@ -1318,13 +1316,10 @@ class ChartZoom {
         this.touch = new ChartZoomTouch(el, this.options);
         this.mouse = new ChartZoomMouse(el, this.options);
         this.wheel = new ChartZoomWheel(el, this.options);
-        const cb = () => this.dispatchScaleUpdated();
+        const cb = () => this.scaleUpdated.dispatch();
         this.touch.scaleUpdated.on(cb);
         this.mouse.scaleUpdated.on(cb);
         this.wheel.scaleUpdated.on(cb);
-    }
-    dispatchScaleUpdated() {
-        this.scaleUpdated.dispatch();
     }
     onScaleUpdated(callback) {
         this.scaleUpdated.on(callback);
@@ -1345,7 +1340,6 @@ const defaultOptions = {
     xRange: 'auto',
     yRange: 'auto',
     realTime: false,
-    zoom: true,
     baseTime: 0,
 };
 const defaultSeriesOptions = {
@@ -1354,37 +1348,55 @@ const defaultSeriesOptions = {
 };
 class TimeChart {
     constructor(el, options) {
-        var _a, _b, _c;
+        var _a, _b;
         this.el = el;
-        const series = (_c = (_b = (_a = options) === null || _a === void 0 ? void 0 : _a.series) === null || _b === void 0 ? void 0 : _b.map(s => (Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s))), (_c !== null && _c !== void 0 ? _c : []));
-        const resolvedOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
-        this.options = resolvedOptions;
-        this.model = new RenderModel(resolvedOptions);
-        this.canvasLayer = new CanvasLayer(el, resolvedOptions, this.model);
-        this.svgLayer = new SVGLayer(el, resolvedOptions, this.model);
-        this.lineChartRenderer = new LineChartRenderer(this.model, this.canvasLayer.gl, resolvedOptions);
+        options = (options !== null && options !== void 0 ? options : {});
+        const series = (_b = (_a = options.series) === null || _a === void 0 ? void 0 : _a.map(s => (Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s))), (_b !== null && _b !== void 0 ? _b : []));
+        const renderOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
+        this.model = new RenderModel(renderOptions);
+        this.canvasLayer = new CanvasLayer(el, renderOptions, this.model);
+        this.svgLayer = new SVGLayer(el, renderOptions, this.model);
+        this.lineChartRenderer = new LineChartRenderer(this.model, this.canvasLayer.gl, renderOptions);
+        this.options = Object.assign(renderOptions, {
+            zoom: this.registerZoom(options.zoom)
+        });
         this.onResize();
         window.addEventListener('resize', () => this.onResize());
-        this.registerZoom();
     }
-    registerZoom() {
-        if (this.options.zoom) {
-            const DAY = 24 * 3600 * 1000;
+    registerZoom(zoomOptions) {
+        if (zoomOptions) {
             const z = new ChartZoom(this.el, {
-                x: {
-                    scale: this.model.xScale,
-                    minDomain: -DAY,
-                    maxDomain: 10 * 365 * DAY,
-                    minDomainExtent: 50,
-                    maxDomainExtent: 2 * 365 * DAY,
-                }
+                x: zoomOptions.x && Object.assign(Object.assign({}, zoomOptions.x), { scale: this.model.xScale }),
+                y: zoomOptions.y && Object.assign(Object.assign({}, zoomOptions.y), { scale: this.model.yScale })
             });
-            this.model.onUpdate(() => z.update());
+            const resolvedOptions = z.options;
+            this.model.updated.on(() => {
+                var _a;
+                const dirs = [
+                    [resolvedOptions.x, this.model.xScale, this.model.xRange],
+                    [resolvedOptions.y, this.model.yScale, this.model.yRange],
+                ];
+                for (const [op, scale, range] of dirs) {
+                    if (!((_a = op) === null || _a === void 0 ? void 0 : _a.autoRange)) {
+                        continue;
+                    }
+                    let [min, max] = scale.domain();
+                    if (range) {
+                        min = Math.min(min, range.min);
+                        max = Math.max(max, range.max);
+                    }
+                    op.minDomain = min;
+                    op.maxDomain = max;
+                }
+                z.update();
+            });
             z.onScaleUpdated(() => {
                 this.options.xRange = null;
+                this.options.yRange = null;
                 this.options.realTime = false;
                 this.update();
             });
+            return resolvedOptions;
         }
     }
     onResize() {

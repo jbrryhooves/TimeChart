@@ -1,5 +1,5 @@
 import { RenderModel } from "./renderModel";
-import { ResolvedOptions } from './options';
+import { ResolvedRenderOptions } from './options';
 export declare class LineChartRenderer {
     private model;
     private gl;
@@ -8,7 +8,7 @@ export declare class LineChartRenderer {
     private arrays;
     private height;
     private width;
-    constructor(model: RenderModel, gl: WebGL2RenderingContext, options: ResolvedOptions);
+    constructor(model: RenderModel, gl: WebGL2RenderingContext, options: ResolvedRenderOptions);
     syncBuffer(): void;
     onResize(width: number, height: number): void;
     drawFrame(): void;

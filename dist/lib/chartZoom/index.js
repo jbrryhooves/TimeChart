@@ -10,7 +10,6 @@ const defaultAxisOptions = {
 };
 export class ChartZoom {
     constructor(el, options) {
-        this.el = el;
         this.scaleUpdated = new EventDispatcher();
         options = (options !== null && options !== void 0 ? options : {});
         this.options = {
@@ -20,13 +19,10 @@ export class ChartZoom {
         this.touch = new ChartZoomTouch(el, this.options);
         this.mouse = new ChartZoomMouse(el, this.options);
         this.wheel = new ChartZoomWheel(el, this.options);
-        const cb = () => this.dispatchScaleUpdated();
+        const cb = () => this.scaleUpdated.dispatch();
         this.touch.scaleUpdated.on(cb);
         this.mouse.scaleUpdated.on(cb);
         this.wheel.scaleUpdated.on(cb);
-    }
-    dispatchScaleUpdated() {
-        this.scaleUpdated.dispatch();
     }
     onScaleUpdated(callback) {
         this.scaleUpdated.on(callback);

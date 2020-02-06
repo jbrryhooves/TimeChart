@@ -216,7 +216,7 @@ export class LineChartRenderer {
         this.arrays = new Map();
         this.height = 0;
         this.width = 0;
-        model.onUpdate(() => this.drawFrame());
+        model.updated.on(() => this.drawFrame());
         this.program.use();
     }
     syncBuffer() {

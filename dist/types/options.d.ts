@@ -1,7 +1,22 @@
 import { ColorSpaceObject, ColorCommonInstance } from 'd3-color';
 import { DataPoint } from './renderModel';
 declare type ColorSpecifier = ColorSpaceObject | ColorCommonInstance | string;
-interface TimeChartOptionsBase {
+interface AxisZoomOptions {
+    autoRange: boolean;
+    minDomain: number;
+    maxDomain: number;
+    minDomainExtent: number;
+    maxDomainExtent: number;
+}
+export interface ZoomOptions {
+    x?: Partial<AxisZoomOptions>;
+    y?: Partial<AxisZoomOptions>;
+}
+export interface ResolvedZoomOptions {
+    x?: AxisZoomOptions;
+    y?: AxisZoomOptions;
+}
+interface TimeChartRenderOptions {
     lineWidth: number;
     backgroundColor: ColorSpecifier;
     paddingLeft: number;
@@ -17,18 +32,23 @@ interface TimeChartOptionsBase {
         max: number;
     } | 'auto' | null;
     realTime: boolean;
-    zoom: boolean;
     /** Milliseconds since `new Date(0)`. Every x in data are relative to this.
      *
      * Set this option and keep the absolute value of x small for higher floating point precision.
      **/
     baseTime: number;
 }
+interface TimeChartOptionsBase extends TimeChartRenderOptions {
+}
 export interface TimeChartOptions extends Partial<TimeChartOptionsBase> {
     series?: Partial<TimeChartSeriesOptions>[];
+    zoom?: ZoomOptions;
 }
-export interface ResolvedOptions extends TimeChartOptionsBase {
+export interface ResolvedRenderOptions extends TimeChartRenderOptions {
     series: TimeChartSeriesOptions[];
+}
+export interface ResolvedOptions extends ResolvedRenderOptions {
+    zoom?: ResolvedZoomOptions;
 }
 export interface TimeChartSeriesOptions {
     data: DataPoint[];

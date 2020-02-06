@@ -7,7 +7,7 @@ export class SVGLayer {
         this.model = model;
         this.xAxis = axisBottom(this.model.xScale);
         this.yAxis = axisLeft(this.model.yScale);
-        model.onUpdate(() => this.update());
+        model.updated.on(() => this.update());
         el.style.position = 'relative';
         const svg = select(el).append('svg')
             .style('position', 'absolute')
@@ -24,6 +24,7 @@ export class SVGLayer {
             .range(xs.range());
         this.xAxis.scale(xts);
         this.xg.call(this.xAxis);
+        this.yAxis.scale(this.model.yScale);
         this.yg.call(this.yAxis);
     }
     onResize() {

@@ -14,7 +14,6 @@ const defaultOptions = {
     xRange: 'auto',
     yRange: 'auto',
     realTime: false,
-    zoom: true,
     baseTime: 0,
 };
 const defaultSeriesOptions = {
@@ -23,37 +22,55 @@ const defaultSeriesOptions = {
 };
 export default class TimeChart {
     constructor(el, options) {
-        var _a, _b, _c;
+        var _a, _b;
         this.el = el;
-        const series = (_c = (_b = (_a = options) === null || _a === void 0 ? void 0 : _a.series) === null || _b === void 0 ? void 0 : _b.map(s => (Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s))), (_c !== null && _c !== void 0 ? _c : []));
-        const resolvedOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
-        this.options = resolvedOptions;
-        this.model = new RenderModel(resolvedOptions);
-        this.canvasLayer = new CanvasLayer(el, resolvedOptions, this.model);
-        this.svgLayer = new SVGLayer(el, resolvedOptions, this.model);
-        this.lineChartRenderer = new LineChartRenderer(this.model, this.canvasLayer.gl, resolvedOptions);
+        options = (options !== null && options !== void 0 ? options : {});
+        const series = (_b = (_a = options.series) === null || _a === void 0 ? void 0 : _a.map(s => (Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s))), (_b !== null && _b !== void 0 ? _b : []));
+        const renderOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
+        this.model = new RenderModel(renderOptions);
+        this.canvasLayer = new CanvasLayer(el, renderOptions, this.model);
+        this.svgLayer = new SVGLayer(el, renderOptions, this.model);
+        this.lineChartRenderer = new LineChartRenderer(this.model, this.canvasLayer.gl, renderOptions);
+        this.options = Object.assign(renderOptions, {
+            zoom: this.registerZoom(options.zoom)
+        });
         this.onResize();
         window.addEventListener('resize', () => this.onResize());
-        this.registerZoom();
     }
-    registerZoom() {
-        if (this.options.zoom) {
-            const DAY = 24 * 3600 * 1000;
+    registerZoom(zoomOptions) {
+        if (zoomOptions) {
             const z = new ChartZoom(this.el, {
-                x: {
-                    scale: this.model.xScale,
-                    minDomain: -DAY,
-                    maxDomain: 10 * 365 * DAY,
-                    minDomainExtent: 50,
-                    maxDomainExtent: 2 * 365 * DAY,
-                }
+                x: zoomOptions.x && Object.assign(Object.assign({}, zoomOptions.x), { scale: this.model.xScale }),
+                y: zoomOptions.y && Object.assign(Object.assign({}, zoomOptions.y), { scale: this.model.yScale })
             });
-            this.model.onUpdate(() => z.update());
+            const resolvedOptions = z.options;
+            this.model.updated.on(() => {
+                var _a;
+                const dirs = [
+                    [resolvedOptions.x, this.model.xScale, this.model.xRange],
+                    [resolvedOptions.y, this.model.yScale, this.model.yRange],
+                ];
+                for (const [op, scale, range] of dirs) {
+                    if (!((_a = op) === null || _a === void 0 ? void 0 : _a.autoRange)) {
+                        continue;
+                    }
+                    let [min, max] = scale.domain();
+                    if (range) {
+                        min = Math.min(min, range.min);
+                        max = Math.max(max, range.max);
+                    }
+                    op.minDomain = min;
+                    op.maxDomain = max;
+                }
+                z.update();
+            });
             z.onScaleUpdated(() => {
                 this.options.xRange = null;
+                this.options.yRange = null;
                 this.options.realTime = false;
                 this.update();
             });
+            return resolvedOptions;
         }
     }
     onResize() {

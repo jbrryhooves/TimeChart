@@ -1,5 +1,5 @@
 import { Selection } from "d3-selection";
-import { ResolvedOptions } from './options';
+import { ResolvedRenderOptions } from './options';
 import { RenderModel } from './renderModel';
 export declare class SVGLayer {
     private options;
@@ -13,7 +13,7 @@ export declare class SVGLayer {
         valueOf(): number;
     }>;
     svgNode: SVGSVGElement;
-    constructor(el: HTMLElement, options: ResolvedOptions, model: RenderModel);
+    constructor(el: HTMLElement, options: ResolvedRenderOptions, model: RenderModel);
     update(): void;
     onResize(): void;
 }
