@@ -564,18 +564,20 @@
     }();
 
     class LinkedWebGLProgram {
-        constructor(gl, vertexSource, fragmentSource) {
+        constructor(gl, vertexSource, fragmentSource, debug) {
             var _a;
             this.gl = gl;
             const program = throwIfFalsy(gl.createProgram());
-            gl.attachShader(program, throwIfFalsy(createShader(gl, gl.VERTEX_SHADER, vertexSource)));
-            gl.attachShader(program, throwIfFalsy(createShader(gl, gl.FRAGMENT_SHADER, fragmentSource)));
+            gl.attachShader(program, throwIfFalsy(createShader(gl, gl.VERTEX_SHADER, vertexSource, debug)));
+            gl.attachShader(program, throwIfFalsy(createShader(gl, gl.FRAGMENT_SHADER, fragmentSource, debug)));
             gl.linkProgram(program);
-            const success = gl.getProgramParameter(program, gl.LINK_STATUS);
-            if (!success) {
-                const message = (_a = gl.getProgramInfoLog(program), (_a !== null && _a !== void 0 ? _a : 'Unknown Error.'));
-                gl.deleteProgram(program);
-                throw new Error(message);
+            if (debug) {
+                const success = gl.getProgramParameter(program, gl.LINK_STATUS);
+                if (!success) {
+                    const message = (_a = gl.getProgramInfoLog(program), (_a !== null && _a !== void 0 ? _a : 'Unknown Error.'));
+                    gl.deleteProgram(program);
+                    throw new Error(message);
+                }
             }
             this.program = program;
         }
@@ -583,16 +585,18 @@
             this.gl.useProgram(this.program);
         }
     }
-    function createShader(gl, type, source) {
+    function createShader(gl, type, source, debug) {
         var _a;
         const shader = throwIfFalsy(gl.createShader(type));
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
-        const success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-        if (!success) {
-            const message = (_a = gl.getShaderInfoLog(shader), (_a !== null && _a !== void 0 ? _a : 'Unknown Error.'));
-            gl.deleteShader(shader);
-            throw new Error(message);
+        if (debug) {
+            const success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+            if (!success) {
+                const message = (_a = gl.getShaderInfoLog(shader), (_a !== null && _a !== void 0 ? _a : 'Unknown Error.'));
+                gl.deleteShader(shader);
+                throw new Error(message);
+            }
         }
         return shader;
     }
@@ -640,8 +644,8 @@ void main() {
 }
 `;
     class LineChartWebGLProgram extends LinkedWebGLProgram {
-        constructor(gl) {
-            super(gl, vsSource, fsSource);
+        constructor(gl, debug) {
+            super(gl, vsSource, fsSource, debug);
             this.locations = {
                 uModelViewMatrix: throwIfFalsy(gl.getUniformLocation(this.program, 'uModelViewMatrix')),
                 uProjectionMatrix: throwIfFalsy(gl.getUniformLocation(this.program, 'uProjectionMatrix')),
@@ -823,7 +827,7 @@ void main() {
             this.model = model;
             this.gl = gl;
             this.options = options;
-            this.program = new LineChartWebGLProgram(this.gl);
+            this.program = new LineChartWebGLProgram(this.gl, this.options.debugWebGL);
             this.arrays = new Map();
             this.height = 0;
             this.width = 0;
@@ -892,6 +896,7 @@ void main() {
 
     class CanvasLayer {
         constructor(el, options, model) {
+            this.options = options;
             model.updated.on(() => this.clear());
             el.style.position = 'relative';
             const canvas = document.createElement('canvas');
@@ -911,7 +916,7 @@ void main() {
         }
         onResize() {
             const canvas = this.canvas;
-            const scale = window.devicePixelRatio;
+            const scale = this.options.pixelRatio;
             canvas.width = canvas.clientWidth * scale;
             canvas.height = canvas.clientHeight * scale;
             this.gl.viewport(0, 0, canvas.width, canvas.height);
@@ -1332,6 +1337,7 @@ void main() {
     }
 
     const defaultOptions = {
+        pixelRatio: window.devicePixelRatio,
         lineWidth: 1,
         backgroundColor: d3Color.rgb(255, 255, 255, 1),
         paddingTop: 10,
@@ -1342,6 +1348,7 @@ void main() {
         yRange: 'auto',
         realTime: false,
         baseTime: 0,
+        debugWebGL: false,
     };
     const defaultSeriesOptions = {
         color: d3Color.rgb(0, 0, 0, 1),

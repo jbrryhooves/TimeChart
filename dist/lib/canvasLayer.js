@@ -1,6 +1,7 @@
 import { resolveColorRGBA } from './options';
 export class CanvasLayer {
     constructor(el, options, model) {
+        this.options = options;
         model.updated.on(() => this.clear());
         el.style.position = 'relative';
         const canvas = document.createElement('canvas');
@@ -20,7 +21,7 @@ export class CanvasLayer {
     }
     onResize() {
         const canvas = this.canvas;
-        const scale = window.devicePixelRatio;
+        const scale = this.options.pixelRatio;
         canvas.width = canvas.clientWidth * scale;
         canvas.height = canvas.clientHeight * scale;
         this.gl.viewport(0, 0, canvas.width, canvas.height);

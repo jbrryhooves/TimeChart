@@ -5,6 +5,7 @@ import { CanvasLayer } from './canvasLayer';
 import { SVGLayer } from './svgLayer';
 import { ChartZoom } from './chartZoom';
 const defaultOptions = {
+    pixelRatio: window.devicePixelRatio,
     lineWidth: 1,
     backgroundColor: rgb(255, 255, 255, 1),
     paddingTop: 10,
@@ -15,6 +16,7 @@ const defaultOptions = {
     yRange: 'auto',
     realTime: false,
     baseTime: 0,
+    debugWebGL: false,
 };
 const defaultSeriesOptions = {
     color: rgb(0, 0, 0, 1),

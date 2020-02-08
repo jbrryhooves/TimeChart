@@ -29,8 +29,8 @@ void main() {
 }
 `;
 class LineChartWebGLProgram extends LinkedWebGLProgram {
-    constructor(gl) {
-        super(gl, vsSource, fsSource);
+    constructor(gl, debug) {
+        super(gl, vsSource, fsSource, debug);
         this.locations = {
             uModelViewMatrix: throwIfFalsy(gl.getUniformLocation(this.program, 'uModelViewMatrix')),
             uProjectionMatrix: throwIfFalsy(gl.getUniformLocation(this.program, 'uProjectionMatrix')),
@@ -212,7 +212,7 @@ export class LineChartRenderer {
         this.model = model;
         this.gl = gl;
         this.options = options;
-        this.program = new LineChartWebGLProgram(this.gl);
+        this.program = new LineChartWebGLProgram(this.gl, this.options.debugWebGL);
         this.arrays = new Map();
         this.height = 0;
         this.width = 0;

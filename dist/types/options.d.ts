@@ -17,6 +17,7 @@ export interface ResolvedZoomOptions {
     y?: AxisZoomOptions;
 }
 interface TimeChartRenderOptions {
+    pixelRatio: number;
     lineWidth: number;
     backgroundColor: ColorSpecifier;
     paddingLeft: number;
@@ -37,6 +38,7 @@ interface TimeChartRenderOptions {
      * Set this option and keep the absolute value of x small for higher floating point precision.
      **/
     baseTime: number;
+    debugWebGL: boolean;
 }
 interface TimeChartOptionsBase extends TimeChartRenderOptions {
 }
