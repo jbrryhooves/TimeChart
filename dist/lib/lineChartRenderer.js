@@ -1,4 +1,4 @@
-import { vec2, vec3, mat4 } from 'gl-matrix';
+import { vec2 } from 'gl-matrix';
 import { LinkedWebGLProgram, throwIfFalsy } from './webGLUtils';
 import { domainSearch } from './utils';
 import { resolveColorRGBA } from './options';
@@ -6,15 +6,17 @@ const vsSource = `#version 300 es
 layout (location = ${0 /* DATA_POINT */}) in vec2 aDataPoint;
 layout (location = ${1 /* DIR */}) in vec2 aDir;
 
-uniform mat4 uModelViewMatrix;
-uniform mat4 uProjectionMatrix;
+uniform vec2 uModelScale;
+uniform vec2 uModelTranslation;
+uniform vec2 uProjectionScale;
 uniform float uLineWidth;
 
 void main() {
-    vec4 cssPose = uModelViewMatrix * vec4(aDataPoint, 0.0, 1.0);
-    vec4 dir = uModelViewMatrix * vec4(aDir, 0.0, 0.0);
+    vec2 cssPose = uModelScale * aDataPoint + uModelTranslation;
+    vec2 dir = uModelScale * aDir;
     dir = normalize(dir);
-    gl_Position = uProjectionMatrix * (cssPose + vec4(-dir.y, dir.x, 0.0, 0.0) * uLineWidth);
+    vec2 pos2d = uProjectionScale * (cssPose + vec2(-dir.y, dir.x) * uLineWidth);
+    gl_Position = vec4(pos2d, 0, 1);
 }
 `;
 const fsSource = `#version 300 es
@@ -32,8 +34,9 @@ class LineChartWebGLProgram extends LinkedWebGLProgram {
     constructor(gl, debug) {
         super(gl, vsSource, fsSource, debug);
         this.locations = {
-            uModelViewMatrix: throwIfFalsy(gl.getUniformLocation(this.program, 'uModelViewMatrix')),
-            uProjectionMatrix: throwIfFalsy(gl.getUniformLocation(this.program, 'uProjectionMatrix')),
+            uModelScale: throwIfFalsy(gl.getUniformLocation(this.program, 'uModelScale')),
+            uModelTranslation: throwIfFalsy(gl.getUniformLocation(this.program, 'uModelTranslation')),
+            uProjectionScale: throwIfFalsy(gl.getUniformLocation(this.program, 'uProjectionScale')),
             uLineWidth: throwIfFalsy(gl.getUniformLocation(this.program, 'uLineWidth')),
             uColor: throwIfFalsy(gl.getUniformLocation(this.program, 'uColor')),
         };
@@ -235,13 +238,8 @@ export class LineChartRenderer {
         const scale = vec2.fromValues(width, height);
         vec2.divide(scale, scale, [2, 2]);
         vec2.inverse(scale, scale);
-        const translate = mat4.create();
-        mat4.fromTranslation(translate, [-1.0, -1.0, 0.0]);
-        const projectionMatrix = mat4.create();
-        mat4.fromScaling(projectionMatrix, [...scale, 1.0]);
-        mat4.multiply(projectionMatrix, translate, projectionMatrix);
         const gl = this.gl;
-        gl.uniformMatrix4fv(this.program.locations.uProjectionMatrix, false, projectionMatrix);
+        gl.uniform2fv(this.program.locations.uProjectionScale, scale);
     }
     drawFrame() {
         var _a;
@@ -260,22 +258,21 @@ export class LineChartRenderer {
             arr.draw(renderDomain);
         }
     }
-    ySvgToCanvas(v) {
-        return -v + this.height;
+    ySvgToView(v) {
+        return -v + this.height / 2;
+    }
+    xSvgToView(v) {
+        return v - this.width / 2;
     }
     syncDomain() {
         const m = this.model;
         const gl = this.gl;
-        const zero = [m.xScale(0), this.ySvgToCanvas(m.yScale(0)), 0];
-        const one = [m.xScale(1), this.ySvgToCanvas(m.yScale(1)), 0];
-        const modelViewMatrix = mat4.create();
-        const scaling = vec3.create();
-        vec3.subtract(scaling, one, zero);
-        mat4.fromScaling(modelViewMatrix, scaling);
-        const translateMat = mat4.create();
-        mat4.fromTranslation(translateMat, zero);
-        mat4.multiply(modelViewMatrix, translateMat, modelViewMatrix);
-        gl.uniformMatrix4fv(this.program.locations.uModelViewMatrix, false, modelViewMatrix);
+        const zero = [this.xSvgToView(m.xScale(0)), this.ySvgToView(m.yScale(0))];
+        const one = [this.xSvgToView(m.xScale(1)), this.ySvgToView(m.yScale(1))];
+        const scaling = vec2.create();
+        vec2.subtract(scaling, one, zero);
+        gl.uniform2fv(this.program.locations.uModelScale, scaling);
+        gl.uniform2fv(this.program.locations.uModelTranslation, zero);
     }
 }
 //# sourceMappingURL=lineChartRenderer.js.map

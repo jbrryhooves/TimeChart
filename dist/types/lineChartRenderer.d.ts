@@ -12,6 +12,7 @@ export declare class LineChartRenderer {
     syncBuffer(): void;
     onResize(width: number, height: number): void;
     drawFrame(): void;
-    private ySvgToCanvas;
+    private ySvgToView;
+    private xSvgToView;
     syncDomain(): void;
 }
