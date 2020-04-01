@@ -1112,8 +1112,9 @@ class Legend {
         style.textContent = `
         .timechart-legend.border {
             background: white;
-            border: 1px solid black;
-            padding: 5px;
+            border: 1px solid hsl(0, 0%, 80%);
+            border-radius: 3px;
+            padding: 5px 10px;
         }
         .timechart-legend .item {
             display: flex;
@@ -1122,7 +1123,7 @@ class Legend {
         }
         .timechart-legend .item .example {
             width: 50px;
-            margin-right: 5px;
+            margin-right: 10px;
             max-height: 1em;
         }`;
         legendRoot.appendChild(style);
