@@ -50,7 +50,7 @@ export class RenderModel {
         const opYRange = this.options.yRange;
         {
             const maxDomain = Math.max(...series.map(s => s.data[s.data.length - 1].x));
-            const minDomain = (_b = (_a = this.xRange) === null || _a === void 0 ? void 0 : _a.min, (_b !== null && _b !== void 0 ? _b : Math.min(...series.map(s => s.data[0].x))));
+            const minDomain = (_b = (_a = this.xRange) === null || _a === void 0 ? void 0 : _a.min) !== null && _b !== void 0 ? _b : Math.min(...series.map(s => s.data[0].x));
             this.xRange = { max: maxDomain, min: minDomain };
             if (this.options.realTime || opXRange === 'auto') {
                 if (this.options.realTime) {

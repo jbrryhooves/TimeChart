@@ -249,7 +249,7 @@ export class LineChartRenderer {
         for (const [ds, arr] of this.arrays) {
             const color = resolveColorRGBA(ds.color);
             gl.uniform4fv(this.program.locations.uColor, color);
-            const lineWidth = (_a = ds.lineWidth, (_a !== null && _a !== void 0 ? _a : this.options.lineWidth));
+            const lineWidth = (_a = ds.lineWidth) !== null && _a !== void 0 ? _a : this.options.lineWidth;
             gl.uniform1f(this.program.locations.uLineWidth, lineWidth / 2);
             const renderDomain = {
                 min: this.model.xScale.invert(-lineWidth / 2),
@@ -267,8 +267,8 @@ export class LineChartRenderer {
     syncDomain() {
         const m = this.model;
         const gl = this.gl;
-        const zero = [this.xSvgToView(m.xScale(0)), this.ySvgToView(m.yScale(0))];
-        const one = [this.xSvgToView(m.xScale(1)), this.ySvgToView(m.yScale(1))];
+        const zero = vec2.fromValues(this.xSvgToView(m.xScale(0)), this.ySvgToView(m.yScale(0)));
+        const one = vec2.fromValues(this.xSvgToView(m.xScale(1)), this.ySvgToView(m.yScale(1)));
         const scaling = vec2.create();
         vec2.subtract(scaling, one, zero);
         gl.uniform2fv(this.program.locations.uModelScale, scaling);

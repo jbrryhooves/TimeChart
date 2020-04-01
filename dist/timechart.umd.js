@@ -99,7 +99,7 @@
             const opYRange = this.options.yRange;
             {
                 const maxDomain = Math.max(...series.map(s => s.data[s.data.length - 1].x));
-                const minDomain = (_b = (_a = this.xRange) === null || _a === void 0 ? void 0 : _a.min, (_b !== null && _b !== void 0 ? _b : Math.min(...series.map(s => s.data[0].x))));
+                const minDomain = (_b = (_a = this.xRange) === null || _a === void 0 ? void 0 : _a.min) !== null && _b !== void 0 ? _b : Math.min(...series.map(s => s.data[0].x));
                 this.xRange = { max: maxDomain, min: minDomain };
                 if (this.options.realTime || opXRange === 'auto') {
                     if (this.options.realTime) {
@@ -332,7 +332,7 @@
             if (debug) {
                 const success = gl.getProgramParameter(program, gl.LINK_STATUS);
                 if (!success) {
-                    const message = (_a = gl.getProgramInfoLog(program), (_a !== null && _a !== void 0 ? _a : 'Unknown Error.'));
+                    const message = (_a = gl.getProgramInfoLog(program)) !== null && _a !== void 0 ? _a : 'Unknown Error.';
                     gl.deleteProgram(program);
                     throw new Error(message);
                 }
@@ -351,7 +351,7 @@
         if (debug) {
             const success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
             if (!success) {
-                const message = (_a = gl.getShaderInfoLog(shader), (_a !== null && _a !== void 0 ? _a : 'Unknown Error.'));
+                const message = (_a = gl.getShaderInfoLog(shader)) !== null && _a !== void 0 ? _a : 'Unknown Error.';
                 gl.deleteShader(shader);
                 throw new Error(message);
             }
@@ -370,14 +370,9 @@
         return [rgbColor.r / 255, rgbColor.g / 255, rgbColor.b / 255, rgbColor.opacity];
     }
 
-    var VertexAttribLocations;
-    (function (VertexAttribLocations) {
-        VertexAttribLocations[VertexAttribLocations["DATA_POINT"] = 0] = "DATA_POINT";
-        VertexAttribLocations[VertexAttribLocations["DIR"] = 1] = "DIR";
-    })(VertexAttribLocations || (VertexAttribLocations = {}));
     const vsSource = `#version 300 es
-layout (location = ${VertexAttribLocations.DATA_POINT}) in vec2 aDataPoint;
-layout (location = ${VertexAttribLocations.DIR}) in vec2 aDir;
+layout (location = ${0 /* DATA_POINT */}) in vec2 aDataPoint;
+layout (location = ${1 /* DIR */}) in vec2 aDir;
 
 uniform vec2 uModelScale;
 uniform vec2 uModelTranslation;
@@ -435,10 +430,10 @@ void main() {
             this.dataBuffer = throwIfFalsy(gl.createBuffer());
             gl.bindBuffer(gl.ARRAY_BUFFER, this.dataBuffer);
             gl.bufferData(gl.ARRAY_BUFFER, BUFFER_CAPACITY * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
-            gl.enableVertexAttribArray(VertexAttribLocations.DATA_POINT);
-            gl.vertexAttribPointer(VertexAttribLocations.DATA_POINT, 2, gl.FLOAT, false, BYTES_PER_POINT, 0);
-            gl.enableVertexAttribArray(VertexAttribLocations.DIR);
-            gl.vertexAttribPointer(VertexAttribLocations.DIR, 2, gl.FLOAT, false, BYTES_PER_POINT, 2 * Float32Array.BYTES_PER_ELEMENT);
+            gl.enableVertexAttribArray(0 /* DATA_POINT */);
+            gl.vertexAttribPointer(0 /* DATA_POINT */, 2, gl.FLOAT, false, BYTES_PER_POINT, 0);
+            gl.enableVertexAttribArray(1 /* DIR */);
+            gl.vertexAttribPointer(1 /* DIR */, 2, gl.FLOAT, false, BYTES_PER_POINT, 2 * Float32Array.BYTES_PER_ELEMENT);
         }
         bind() {
             this.gl.bindVertexArray(this.vao);
@@ -622,7 +617,7 @@ void main() {
             for (const [ds, arr] of this.arrays) {
                 const color = resolveColorRGBA(ds.color);
                 gl.uniform4fv(this.program.locations.uColor, color);
-                const lineWidth = (_a = ds.lineWidth, (_a !== null && _a !== void 0 ? _a : this.options.lineWidth));
+                const lineWidth = (_a = ds.lineWidth) !== null && _a !== void 0 ? _a : this.options.lineWidth;
                 gl.uniform1f(this.program.locations.uLineWidth, lineWidth / 2);
                 const renderDomain = {
                     min: this.model.xScale.invert(-lineWidth / 2),
@@ -640,8 +635,8 @@ void main() {
         syncDomain() {
             const m = this.model;
             const gl = this.gl;
-            const zero = [this.xSvgToView(m.xScale(0)), this.ySvgToView(m.yScale(0))];
-            const one = [this.xSvgToView(m.xScale(1)), this.ySvgToView(m.yScale(1))];
+            const zero = fromValues(this.xSvgToView(m.xScale(0)), this.ySvgToView(m.yScale(0)));
+            const one = fromValues(this.xSvgToView(m.xScale(1)), this.ySvgToView(m.yScale(1)));
             const scaling = create();
             subtract(scaling, one, zero);
             gl.uniform2fv(this.program.locations.uModelScale, scaling);
@@ -1069,7 +1064,7 @@ void main() {
     class ChartZoom {
         constructor(el, options) {
             this.scaleUpdated = new EventDispatcher();
-            options = (options !== null && options !== void 0 ? options : {});
+            options = options !== null && options !== void 0 ? options : {};
             this.options = {
                 x: options.x && Object.assign(Object.assign({}, defaultAxisOptions), options.x),
                 y: options.y && Object.assign(Object.assign({}, defaultAxisOptions), options.y),
@@ -1113,8 +1108,8 @@ void main() {
         constructor(el, options) {
             var _a, _b;
             this.el = el;
-            options = (options !== null && options !== void 0 ? options : {});
-            const series = (_b = (_a = options.series) === null || _a === void 0 ? void 0 : _a.map(s => (Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s))), (_b !== null && _b !== void 0 ? _b : []));
+            options = options !== null && options !== void 0 ? options : {};
+            const series = (_b = (_a = options.series) === null || _a === void 0 ? void 0 : _a.map(s => (Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s)))) !== null && _b !== void 0 ? _b : [];
             const renderOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
             this.model = new RenderModel(renderOptions);
             this.canvasLayer = new CanvasLayer(el, renderOptions, this.model);
@@ -1134,13 +1129,12 @@ void main() {
                 });
                 const resolvedOptions = z.options;
                 this.model.updated.on(() => {
-                    var _a;
                     const dirs = [
                         [resolvedOptions.x, this.model.xScale, this.model.xRange],
                         [resolvedOptions.y, this.model.yScale, this.model.yRange],
                     ];
                     for (const [op, scale, range] of dirs) {
-                        if (!((_a = op) === null || _a === void 0 ? void 0 : _a.autoRange)) {
+                        if (!(op === null || op === void 0 ? void 0 : op.autoRange)) {
                             continue;
                         }
                         let [min, max] = scale.domain();

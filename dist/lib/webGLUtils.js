@@ -9,7 +9,7 @@ export class LinkedWebGLProgram {
         if (debug) {
             const success = gl.getProgramParameter(program, gl.LINK_STATUS);
             if (!success) {
-                const message = (_a = gl.getProgramInfoLog(program), (_a !== null && _a !== void 0 ? _a : 'Unknown Error.'));
+                const message = (_a = gl.getProgramInfoLog(program)) !== null && _a !== void 0 ? _a : 'Unknown Error.';
                 gl.deleteProgram(program);
                 throw new Error(message);
             }
@@ -28,7 +28,7 @@ export function createShader(gl, type, source, debug) {
     if (debug) {
         const success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
         if (!success) {
-            const message = (_a = gl.getShaderInfoLog(shader), (_a !== null && _a !== void 0 ? _a : 'Unknown Error.'));
+            const message = (_a = gl.getShaderInfoLog(shader)) !== null && _a !== void 0 ? _a : 'Unknown Error.';
             gl.deleteShader(shader);
             throw new Error(message);
         }

@@ -11,7 +11,7 @@ const defaultAxisOptions = {
 export class ChartZoom {
     constructor(el, options) {
         this.scaleUpdated = new EventDispatcher();
-        options = (options !== null && options !== void 0 ? options : {});
+        options = options !== null && options !== void 0 ? options : {};
         this.options = {
             x: options.x && Object.assign(Object.assign({}, defaultAxisOptions), options.x),
             y: options.y && Object.assign(Object.assign({}, defaultAxisOptions), options.y),

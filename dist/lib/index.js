@@ -26,8 +26,8 @@ export default class TimeChart {
     constructor(el, options) {
         var _a, _b;
         this.el = el;
-        options = (options !== null && options !== void 0 ? options : {});
-        const series = (_b = (_a = options.series) === null || _a === void 0 ? void 0 : _a.map(s => (Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s))), (_b !== null && _b !== void 0 ? _b : []));
+        options = options !== null && options !== void 0 ? options : {};
+        const series = (_b = (_a = options.series) === null || _a === void 0 ? void 0 : _a.map(s => (Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s)))) !== null && _b !== void 0 ? _b : [];
         const renderOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
         this.model = new RenderModel(renderOptions);
         this.canvasLayer = new CanvasLayer(el, renderOptions, this.model);
@@ -47,13 +47,12 @@ export default class TimeChart {
             });
             const resolvedOptions = z.options;
             this.model.updated.on(() => {
-                var _a;
                 const dirs = [
                     [resolvedOptions.x, this.model.xScale, this.model.xRange],
                     [resolvedOptions.y, this.model.yScale, this.model.yRange],
                 ];
                 for (const [op, scale, range] of dirs) {
-                    if (!((_a = op) === null || _a === void 0 ? void 0 : _a.autoRange)) {
+                    if (!(op === null || op === void 0 ? void 0 : op.autoRange)) {
                         continue;
                     }
                     let [min, max] = scale.domain();
