@@ -4,6 +4,8 @@ import { LineChartRenderer } from './lineChartRenderer';
 import { CanvasLayer } from './canvasLayer';
 import { SVGLayer } from './svgLayer';
 import { ChartZoom } from './chartZoom';
+import { D3AxisRenderer } from './d3AxisRenderer';
+import { Legend } from './legend';
 const defaultOptions = {
     pixelRatio: window.devicePixelRatio,
     lineWidth: 1,
@@ -30,9 +32,11 @@ export default class TimeChart {
         const series = (_b = (_a = options.series) === null || _a === void 0 ? void 0 : _a.map(s => (Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s)))) !== null && _b !== void 0 ? _b : [];
         const renderOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
         this.model = new RenderModel(renderOptions);
-        this.canvasLayer = new CanvasLayer(el, renderOptions, this.model);
-        this.svgLayer = new SVGLayer(el, renderOptions, this.model);
-        this.lineChartRenderer = new LineChartRenderer(this.model, this.canvasLayer.gl, renderOptions);
+        const canvasLayer = new CanvasLayer(el, renderOptions, this.model);
+        const lineChartRenderer = new LineChartRenderer(this.model, canvasLayer.gl, renderOptions);
+        const svgLayer = new SVGLayer(el);
+        const axisRenderer = new D3AxisRenderer(this.model, svgLayer.svgNode, renderOptions);
+        const legend = new Legend(el, renderOptions);
         this.options = Object.assign(renderOptions, {
             zoom: this.registerZoom(options.zoom)
         });
@@ -75,12 +79,7 @@ export default class TimeChart {
         }
     }
     onResize() {
-        const canvas = this.canvasLayer.canvas;
-        this.model.resize(canvas.clientWidth, canvas.clientHeight);
-        this.svgLayer.onResize();
-        this.canvasLayer.onResize();
-        this.lineChartRenderer.onResize(canvas.clientWidth, canvas.clientHeight);
-        this.update();
+        this.model.resize(this.el.clientWidth, this.el.clientHeight);
     }
     update() {
         this.model.requestRedraw();

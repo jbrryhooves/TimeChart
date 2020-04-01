@@ -219,8 +219,9 @@ export class LineChartRenderer {
         this.arrays = new Map();
         this.height = 0;
         this.width = 0;
-        model.updated.on(() => this.drawFrame());
         this.program.use();
+        model.updated.on(() => this.drawFrame());
+        model.resized.on((w, h) => this.onResize(w, h));
     }
     syncBuffer() {
         for (const s of this.options.series) {
@@ -267,10 +268,10 @@ export class LineChartRenderer {
     syncDomain() {
         const m = this.model;
         const gl = this.gl;
-        const zero = vec2.fromValues(this.xSvgToView(m.xScale(0)), this.ySvgToView(m.yScale(0)));
-        const one = vec2.fromValues(this.xSvgToView(m.xScale(1)), this.ySvgToView(m.yScale(1)));
-        const scaling = vec2.create();
-        vec2.subtract(scaling, one, zero);
+        const zero = [this.xSvgToView(m.xScale(0)), this.ySvgToView(m.yScale(0))];
+        const one = [this.xSvgToView(m.xScale(1)), this.ySvgToView(m.yScale(1))];
+        // Not using vec2 for precision
+        const scaling = [one[0] - zero[0], one[1] - zero[1]];
         gl.uniform2fv(this.program.locations.uModelScale, scaling);
         gl.uniform2fv(this.program.locations.uModelTranslation, zero);
     }

@@ -16,8 +16,9 @@ export declare class RenderModel {
     yRange: MinMax | null;
     private seriesInfo;
     constructor(options: ResolvedRenderOptions);
+    resized: EventDispatcher<(width: number, height: number) => void>;
     resize(width: number, height: number): void;
-    updated: EventDispatcher<[]>;
+    updated: EventDispatcher<() => void>;
     update(): void;
     private redrawRequested;
     requestRedraw(): void;

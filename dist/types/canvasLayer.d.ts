@@ -5,6 +5,6 @@ export declare class CanvasLayer {
     canvas: HTMLCanvasElement;
     gl: WebGL2RenderingContext;
     constructor(el: HTMLElement, options: ResolvedRenderOptions, model: RenderModel);
-    onResize(): void;
+    onResize(width: number, height: number): void;
     clear(): void;
 }

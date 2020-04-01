@@ -1,7 +1,7 @@
 import { rgb } from 'd3-color';
 import { scaleLinear, scaleTime } from 'd3-scale';
-import { axisBottom, axisLeft } from 'd3-axis';
 import { select } from 'd3-selection';
+import { axisBottom, axisLeft } from 'd3-axis';
 
 /** lower bound */
 function domainSearch(data, start, end, value, key) {
@@ -67,6 +67,7 @@ class RenderModel {
         this.xRange = null;
         this.yRange = null;
         this.seriesInfo = new Map();
+        this.resized = new EventDispatcher();
         this.updated = new EventDispatcher();
         this.redrawRequested = false;
         if (options.xRange !== 'auto' && options.xRange) {
@@ -80,6 +81,8 @@ class RenderModel {
         const op = this.options;
         this.xScale.range([op.paddingLeft, width - op.paddingRight]);
         this.yScale.range([height - op.paddingBottom, op.paddingTop]);
+        this.resized.dispatch(width, height);
+        this.requestRedraw();
     }
     update() {
         var _a, _b;
@@ -586,8 +589,9 @@ class LineChartRenderer {
         this.arrays = new Map();
         this.height = 0;
         this.width = 0;
-        model.updated.on(() => this.drawFrame());
         this.program.use();
+        model.updated.on(() => this.drawFrame());
+        model.resized.on((w, h) => this.onResize(w, h));
     }
     syncBuffer() {
         for (const s of this.options.series) {
@@ -634,10 +638,10 @@ class LineChartRenderer {
     syncDomain() {
         const m = this.model;
         const gl = this.gl;
-        const zero = fromValues(this.xSvgToView(m.xScale(0)), this.ySvgToView(m.yScale(0)));
-        const one = fromValues(this.xSvgToView(m.xScale(1)), this.ySvgToView(m.yScale(1)));
-        const scaling = create();
-        subtract(scaling, one, zero);
+        const zero = [this.xSvgToView(m.xScale(0)), this.ySvgToView(m.yScale(0))];
+        const one = [this.xSvgToView(m.xScale(1)), this.ySvgToView(m.yScale(1))];
+        // Not using vec2 for precision
+        const scaling = [one[0] - zero[0], one[1] - zero[1]];
         gl.uniform2fv(this.program.locations.uModelScale, scaling);
         gl.uniform2fv(this.program.locations.uModelTranslation, zero);
     }
@@ -646,7 +650,6 @@ class LineChartRenderer {
 class CanvasLayer {
     constructor(el, options, model) {
         this.options = options;
-        model.updated.on(() => this.clear());
         el.style.position = 'relative';
         const canvas = document.createElement('canvas');
         canvas.style.width = '100%';
@@ -662,12 +665,14 @@ class CanvasLayer {
         const bgColor = resolveColorRGBA(options.backgroundColor);
         gl.clearColor(...bgColor);
         this.canvas = canvas;
+        model.updated.on(() => this.clear());
+        model.resized.on((w, h) => this.onResize(w, h));
     }
-    onResize() {
+    onResize(width, height) {
         const canvas = this.canvas;
         const scale = this.options.pixelRatio;
-        canvas.width = canvas.clientWidth * scale;
-        canvas.height = canvas.clientHeight * scale;
+        canvas.width = width * scale;
+        canvas.height = height * scale;
         this.gl.viewport(0, 0, canvas.width, canvas.height);
     }
     clear() {
@@ -677,37 +682,13 @@ class CanvasLayer {
 }
 
 class SVGLayer {
-    constructor(el, options, model) {
-        this.options = options;
-        this.model = model;
-        this.xAxis = axisBottom(this.model.xScale);
-        this.yAxis = axisLeft(this.model.yScale);
-        model.updated.on(() => this.update());
+    constructor(el) {
         el.style.position = 'relative';
-        const svg = select(el).append('svg')
-            .style('position', 'absolute')
-            .style('width', '100%')
-            .style('height', '100%');
-        this.svgNode = svg.node();
-        this.xg = svg.append('g');
-        this.yg = svg.append('g');
-    }
-    update() {
-        const xs = this.model.xScale;
-        const xts = scaleTime()
-            .domain(xs.domain().map(d => d + this.options.baseTime))
-            .range(xs.range());
-        this.xAxis.scale(xts);
-        this.xg.call(this.xAxis);
-        this.yAxis.scale(this.model.yScale);
-        this.yg.call(this.yAxis);
-    }
-    onResize() {
-        const svg = this.svgNode;
-        const op = this.options;
-        this.xg.attr('transform', `translate(0, ${svg.clientHeight - op.paddingBottom})`);
-        this.yg.attr('transform', `translate(${op.paddingLeft}, 0)`);
-        this.update();
+        this.svgNode = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        this.svgNode.style.position = 'absolute';
+        this.svgNode.style.width = '100%';
+        this.svgNode.style.height = '100%';
+        el.appendChild(this.svgNode);
     }
 }
 
@@ -1085,6 +1066,88 @@ class ChartZoom {
     }
 }
 
+class D3AxisRenderer {
+    constructor(model, svg, options) {
+        this.model = model;
+        this.options = options;
+        this.xAxis = axisBottom(this.model.xScale);
+        this.yAxis = axisLeft(this.model.yScale);
+        const d3Svg = select(svg);
+        this.xg = d3Svg.append('g');
+        this.yg = d3Svg.append('g');
+        model.updated.on(() => this.update());
+        model.resized.on((w, h) => this.onResize(w, h));
+    }
+    update() {
+        const xs = this.model.xScale;
+        const xts = scaleTime()
+            .domain(xs.domain().map(d => d + this.options.baseTime))
+            .range(xs.range());
+        this.xAxis.scale(xts);
+        this.xg.call(this.xAxis);
+        this.yAxis.scale(this.model.yScale);
+        this.yg.call(this.yAxis);
+    }
+    onResize(width, height) {
+        const op = this.options;
+        this.xg.attr('transform', `translate(0, ${height - op.paddingBottom})`);
+        this.yg.attr('transform', `translate(${op.paddingLeft}, 0)`);
+        this.update();
+    }
+}
+
+class Legend {
+    constructor(el, options) {
+        var _a;
+        this.el = el;
+        this.options = options;
+        el.style.position = 'relative';
+        this.legend = document.createElement('chart-legend');
+        const ls = this.legend.style;
+        ls.position = 'absolute';
+        ls.right = `${options.paddingRight}px`;
+        ls.top = `${options.paddingTop}px`;
+        const legendRoot = this.legend.attachShadow({ mode: 'open' });
+        const style = document.createElement('style');
+        style.textContent = `
+        .timechart-legend.border {
+            background: white;
+            border: 1px solid black;
+            padding: 5px;
+        }
+        .timechart-legend .item {
+            display: flex;
+            flex-flow: row nowrap;
+            align-items: center;
+        }
+        .timechart-legend .item .example {
+            width: 50px;
+            margin-right: 5px;
+            max-height: 1em;
+        }`;
+        legendRoot.appendChild(style);
+        const border = document.createElement('div');
+        border.className = 'timechart-legend border';
+        for (const s of options.series) {
+            const item = document.createElement('div');
+            item.className = 'item';
+            const example = document.createElement('div');
+            example.className = 'example';
+            example.style.height = `${(_a = s.lineWidth) !== null && _a !== void 0 ? _a : options.lineWidth}px`;
+            example.style.backgroundColor = s.color.toString();
+            item.appendChild(example);
+            const name = document.createElement('label');
+            name.textContent = s.name;
+            item.appendChild(name);
+            border.appendChild(item);
+        }
+        legendRoot.appendChild(border);
+        el.appendChild(this.legend);
+    }
+    update() {
+    }
+}
+
 const defaultOptions = {
     pixelRatio: window.devicePixelRatio,
     lineWidth: 1,
@@ -1111,9 +1174,11 @@ class TimeChart {
         const series = (_b = (_a = options.series) === null || _a === void 0 ? void 0 : _a.map(s => (Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s)))) !== null && _b !== void 0 ? _b : [];
         const renderOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
         this.model = new RenderModel(renderOptions);
-        this.canvasLayer = new CanvasLayer(el, renderOptions, this.model);
-        this.svgLayer = new SVGLayer(el, renderOptions, this.model);
-        this.lineChartRenderer = new LineChartRenderer(this.model, this.canvasLayer.gl, renderOptions);
+        const canvasLayer = new CanvasLayer(el, renderOptions, this.model);
+        const lineChartRenderer = new LineChartRenderer(this.model, canvasLayer.gl, renderOptions);
+        const svgLayer = new SVGLayer(el);
+        const axisRenderer = new D3AxisRenderer(this.model, svgLayer.svgNode, renderOptions);
+        const legend = new Legend(el, renderOptions);
         this.options = Object.assign(renderOptions, {
             zoom: this.registerZoom(options.zoom)
         });
@@ -1156,12 +1221,7 @@ class TimeChart {
         }
     }
     onResize() {
-        const canvas = this.canvasLayer.canvas;
-        this.model.resize(canvas.clientWidth, canvas.clientHeight);
-        this.svgLayer.onResize();
-        this.canvasLayer.onResize();
-        this.lineChartRenderer.onResize(canvas.clientWidth, canvas.clientHeight);
-        this.update();
+        this.model.resize(this.el.clientWidth, this.el.clientHeight);
     }
     update() {
         this.model.requestRedraw();

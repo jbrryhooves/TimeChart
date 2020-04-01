@@ -3,7 +3,7 @@ import { EventDispatcher } from '../utils';
 export declare class ChartZoomMouse {
     private el;
     private options;
-    scaleUpdated: EventDispatcher<[]>;
+    scaleUpdated: EventDispatcher<() => void>;
     private previousPoint;
     constructor(el: CapableElement, options: ResolvedOptions);
     private point;

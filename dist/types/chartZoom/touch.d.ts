@@ -3,7 +3,7 @@ import { EventDispatcher } from '../utils';
 export declare class ChartZoomTouch {
     private el;
     private options;
-    scaleUpdated: EventDispatcher<[]>;
+    scaleUpdated: EventDispatcher<() => void>;
     private majorDirection;
     private previousPoints;
     private enabled;

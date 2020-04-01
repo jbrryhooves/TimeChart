@@ -2,7 +2,6 @@ import { resolveColorRGBA } from './options';
 export class CanvasLayer {
     constructor(el, options, model) {
         this.options = options;
-        model.updated.on(() => this.clear());
         el.style.position = 'relative';
         const canvas = document.createElement('canvas');
         canvas.style.width = '100%';
@@ -18,12 +17,14 @@ export class CanvasLayer {
         const bgColor = resolveColorRGBA(options.backgroundColor);
         gl.clearColor(...bgColor);
         this.canvas = canvas;
+        model.updated.on(() => this.clear());
+        model.resized.on((w, h) => this.onResize(w, h));
     }
-    onResize() {
+    onResize(width, height) {
         const canvas = this.canvas;
         const scale = this.options.pixelRatio;
-        canvas.width = canvas.clientWidth * scale;
-        canvas.height = canvas.clientHeight * scale;
+        canvas.width = width * scale;
+        canvas.height = height * scale;
         this.gl.viewport(0, 0, canvas.width, canvas.height);
     }
     clear() {
