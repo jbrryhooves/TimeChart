@@ -692,6 +692,35 @@ void main() {
             el.appendChild(this.svgNode);
         }
     }
+    function makeContentBox(model, options) {
+        const contentSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        contentSvg.classList.add('content-box');
+        contentSvg.x.baseVal.value = options.paddingLeft;
+        contentSvg.y.baseVal.value = options.paddingRight;
+        model.resized.on((width, height) => {
+            contentSvg.width.baseVal.value = width - options.paddingRight - options.paddingLeft;
+            contentSvg.height.baseVal.value = height - options.paddingTop - options.paddingBottom;
+        });
+        return contentSvg;
+    }
+
+    class ContentBoxDetector {
+        constructor(el, options) {
+            el.style.position = 'relative';
+            this.node = document.createElement('div');
+            this.node.style.position = 'absolute';
+            this.node.style.left = `${options.paddingLeft}px`;
+            this.node.style.right = `${options.paddingRight}px`;
+            this.node.style.top = `${options.paddingTop}px`;
+            this.node.style.bottom = `${options.paddingBottom}px`;
+            el.appendChild(this.node);
+        }
+    }
+    ContentBoxDetector.meta = {
+        name: 'contentBoxDetector',
+        required: ['wrapper', 'options'],
+        optional: ['svgLayer', 'canvasLayer'],
+    };
 
     function zip(...rows) {
         return [...rows[0]].map((_, c) => rows.map(row => row[c]));
@@ -1150,6 +1179,115 @@ void main() {
         }
     }
 
+    class Crosshair {
+        constructor(svg, model, options, detector) {
+            const contentBox = makeContentBox(model, options);
+            const initTrans = contentBox.createSVGTransform();
+            initTrans.setTranslate(0, 0);
+            const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+            style.textContent = `
+        .timechart-crosshair {
+            stroke: #000000A0;
+            stroke-width: 1;
+            stroke-dasharray: 2 1;
+            visibility: hidden;
+        }`;
+            const hLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            hLine.transform.baseVal.initialize(initTrans);
+            hLine.x2.baseVal.newValueSpecifiedUnits(SVGLength.SVG_LENGTHTYPE_PERCENTAGE, 100);
+            const vLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            vLine.transform.baseVal.initialize(initTrans);
+            vLine.y2.baseVal.newValueSpecifiedUnits(SVGLength.SVG_LENGTHTYPE_PERCENTAGE, 100);
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.classList.add('timechart-crosshair');
+            for (const e of [style, hLine, vLine]) {
+                g.appendChild(e);
+            }
+            detector.node.addEventListener('mousemove', ev => {
+                const contentRect = contentBox.getBoundingClientRect();
+                hLine.transform.baseVal.getItem(0).setTranslate(0, ev.clientY - contentRect.y);
+                vLine.transform.baseVal.getItem(0).setTranslate(ev.clientX - contentRect.x, 0);
+            });
+            detector.node.addEventListener('mouseenter', ev => g.style.visibility = 'visible');
+            detector.node.addEventListener('mouseleave', ev => g.style.visibility = 'hidden');
+            contentBox.appendChild(g);
+            svg.svgNode.appendChild(contentBox);
+        }
+    }
+    Crosshair.meta = {
+        name: 'crosshair',
+        required: ['svgLayer', 'model', 'options', 'contentBoxDetector'],
+    };
+
+    class NearestPoint {
+        constructor(svg, model, options, detector) {
+            var _a;
+            this.model = model;
+            this.options = options;
+            this.intersectPoints = new Map();
+            this.lastX = null;
+            const initTrans = svg.svgNode.createSVGTransform();
+            initTrans.setTranslate(0, 0);
+            const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+            style.textContent = `
+        .timechart-crosshair-intersect {
+            fill: ${this.options.backgroundColor};
+            visibility: hidden;
+        }
+        .timechart-crosshair-intersect circle {
+            r: 3px;
+        }
+        `;
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.classList.add('timechart-crosshair-intersect');
+            g.appendChild(style);
+            for (const s of this.options.series) {
+                const intersect = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                intersect.style.stroke = s.color.toString();
+                intersect.style.strokeWidth = `${(_a = s.lineWidth) !== null && _a !== void 0 ? _a : this.options.lineWidth}px`;
+                intersect.transform.baseVal.initialize(initTrans);
+                g.appendChild(intersect);
+                this.intersectPoints.set(s, intersect);
+            }
+            detector.node.addEventListener('mousemove', ev => {
+                const rect = svg.svgNode.getBoundingClientRect();
+                this.lastX = ev.clientX - rect.left;
+                this.adjustIntersectPoints();
+            });
+            detector.node.addEventListener('mouseenter', ev => g.style.visibility = 'visible');
+            detector.node.addEventListener('mouseleave', ev => g.style.visibility = 'hidden');
+            svg.svgNode.appendChild(g);
+            model.updated.on(() => this.adjustIntersectPoints());
+        }
+        adjustIntersectPoints() {
+            if (this.lastX === null) {
+                return;
+            }
+            const domain = this.model.xScale.invert(this.lastX);
+            for (const s of this.options.series) {
+                const pos = domainSearch(s.data, 0, s.data.length, domain, d => d.x);
+                const near = [];
+                if (pos > 0) {
+                    near.push(s.data[pos - 1]);
+                }
+                if (pos < s.data.length) {
+                    near.push(s.data[pos]);
+                }
+                const sortKey = (a) => Math.abs(a.x - domain);
+                near.sort((a, b) => sortKey(a) - sortKey(b));
+                const intersect = this.intersectPoints.get(s);
+                if (!intersect) {
+                    continue; // TODO: Dynamic add series
+                }
+                intersect.transform.baseVal.getItem(0).setTranslate(this.model.xScale(near[0].x), this.model.yScale(near[0].y));
+            }
+        }
+    }
+    NearestPoint.meta = {
+        name: 'nearestPoint',
+        required: ['svgLayer', 'model', 'options', 'contentBoxDetector']
+    };
+
     const defaultOptions = {
         pixelRatio: window.devicePixelRatio,
         lineWidth: 1,
@@ -1179,8 +1317,11 @@ void main() {
             const canvasLayer = new CanvasLayer(el, renderOptions, this.model);
             const lineChartRenderer = new LineChartRenderer(this.model, canvasLayer.gl, renderOptions);
             const svgLayer = new SVGLayer(el);
+            const contentBoxDetector = new ContentBoxDetector(el, renderOptions);
             const axisRenderer = new D3AxisRenderer(this.model, svgLayer.svgNode, renderOptions);
             const legend = new Legend(el, renderOptions);
+            const crosshair = new Crosshair(svgLayer, this.model, renderOptions, contentBoxDetector);
+            const nearestPoint = new NearestPoint(svgLayer, this.model, renderOptions, contentBoxDetector);
             this.options = Object.assign(renderOptions, {
                 zoom: this.registerZoom(options.zoom)
             });
