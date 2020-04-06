@@ -1,13 +1,13 @@
 {
     "name": "timechart",
-    "version": "0.2.2",
+    "version": "0.2.3",
     "description": "An chart library specialized for large-scale time-series data, built on WebGL.",
     "repository": {
         "url": "https://github.com/huww98/TimeChart.git",
         "type": "git"
     },
     "main": "dist/timechart.umd.js",
-    "module": "dist/timechart.es5.js",
+    "module": "dist/lib/index.js",
     "types": "dist/types/index.d.ts",
     "files": [
         "dist"
