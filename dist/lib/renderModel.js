@@ -102,5 +102,11 @@ export class RenderModel {
             this.update();
         });
     }
+    pxPoint(dataPoint) {
+        return {
+            x: this.xScale(dataPoint.x),
+            y: this.yScale(dataPoint.y),
+        };
+    }
 }
 //# sourceMappingURL=renderModel.js.map

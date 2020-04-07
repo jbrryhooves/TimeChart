@@ -22,5 +22,9 @@ export declare class RenderModel {
     update(): void;
     private redrawRequested;
     requestRedraw(): void;
+    pxPoint(dataPoint: DataPoint): {
+        x: number;
+        y: number;
+    };
 }
 export {};
