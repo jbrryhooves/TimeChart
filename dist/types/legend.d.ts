@@ -1,8 +1,11 @@
-import { ResolvedRenderOptions } from "./options";
+import { ResolvedRenderOptions, TimeChartSeriesOptions } from "./options";
+import { RenderModel } from './renderModel';
 export declare class Legend {
     private el;
     private options;
     legend: HTMLElement;
-    constructor(el: HTMLElement, options: ResolvedRenderOptions);
+    items: Map<TimeChartSeriesOptions, HTMLElement>;
+    itemContainer: HTMLElement;
+    constructor(el: HTMLElement, model: RenderModel, options: ResolvedRenderOptions);
     update(): void;
 }

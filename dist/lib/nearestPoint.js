@@ -61,7 +61,8 @@ export { NearestPointModel };
 let NearestPoint = /** @class */ (() => {
     class NearestPoint {
         constructor(svg, options, pModel) {
-            var _a;
+            this.svg = svg;
+            this.options = options;
             this.pModel = pModel;
             this.intersectPoints = new Map();
             const initTrans = svg.svgNode.createSVGTransform();
@@ -79,19 +80,25 @@ let NearestPoint = /** @class */ (() => {
             const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             g.classList.add('timechart-crosshair-intersect');
             g.appendChild(style);
-            for (const s of options.series) {
-                const intersect = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                intersect.style.stroke = s.color.toString();
-                intersect.style.strokeWidth = `${(_a = s.lineWidth) !== null && _a !== void 0 ? _a : options.lineWidth}px`;
-                intersect.transform.baseVal.initialize(initTrans);
-                g.appendChild(intersect);
-                this.intersectPoints.set(s, intersect);
-            }
+            this.container = g;
+            this.adjustIntersectPoints();
             svg.svgNode.appendChild(g);
             pModel.updated.on(() => this.adjustIntersectPoints());
         }
         adjustIntersectPoints() {
-            for (const [s, intersect] of this.intersectPoints) {
+            var _a;
+            const initTrans = this.svg.svgNode.createSVGTransform();
+            initTrans.setTranslate(0, 0);
+            for (const s of this.options.series) {
+                if (!this.intersectPoints.has(s)) {
+                    const intersect = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    intersect.style.stroke = s.color.toString();
+                    intersect.style.strokeWidth = `${(_a = s.lineWidth) !== null && _a !== void 0 ? _a : this.options.lineWidth}px`;
+                    intersect.transform.baseVal.initialize(initTrans);
+                    this.container.appendChild(intersect);
+                    this.intersectPoints.set(s, intersect);
+                }
+                const intersect = this.intersectPoints.get(s);
                 const point = this.pModel.points.get(s);
                 if (!point) {
                     intersect.style.visibility = 'hidden';

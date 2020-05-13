@@ -22,12 +22,15 @@ export declare class NearestPointModel {
     adjustPoints(): void;
 }
 export declare class NearestPoint {
+    private svg;
+    private options;
     private pModel;
     static meta: {
         name: string;
         required: string[];
     };
     private intersectPoints;
+    private container;
     constructor(svg: SVGLayer, options: ResolvedRenderOptions, pModel: NearestPointModel);
     adjustIntersectPoints(): void;
 }

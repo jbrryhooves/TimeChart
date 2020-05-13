@@ -1,8 +1,8 @@
 export class Legend {
-    constructor(el, options) {
-        var _a;
+    constructor(el, model, options) {
         this.el = el;
         this.options = options;
+        this.items = new Map();
         el.style.position = 'relative';
         this.legend = document.createElement('chart-legend');
         const ls = this.legend.style;
@@ -31,23 +31,31 @@ export class Legend {
         legendRoot.appendChild(style);
         const border = document.createElement('div');
         border.className = 'timechart-legend border';
-        for (const s of options.series) {
+        this.itemContainer = border;
+        this.update();
+        legendRoot.appendChild(border);
+        el.appendChild(this.legend);
+        model.updated.on(() => this.update());
+    }
+    update() {
+        var _a;
+        for (const s of this.options.series) {
+            if (this.items.has(s)) {
+                continue;
+            }
             const item = document.createElement('div');
             item.className = 'item';
             const example = document.createElement('div');
             example.className = 'example';
-            example.style.height = `${(_a = s.lineWidth) !== null && _a !== void 0 ? _a : options.lineWidth}px`;
+            example.style.height = `${(_a = s.lineWidth) !== null && _a !== void 0 ? _a : this.options.lineWidth}px`;
             example.style.backgroundColor = s.color.toString();
             item.appendChild(example);
             const name = document.createElement('label');
             name.textContent = s.name;
             item.appendChild(name);
-            border.appendChild(item);
+            this.itemContainer.appendChild(item);
+            this.items.set(s, item);
         }
-        legendRoot.appendChild(border);
-        el.appendChild(this.legend);
-    }
-    update() {
     }
 }
 //# sourceMappingURL=legend.js.map

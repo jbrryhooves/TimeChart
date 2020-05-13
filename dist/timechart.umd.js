@@ -1136,10 +1136,10 @@ void main() {
     }
 
     class Legend {
-        constructor(el, options) {
-            var _a;
+        constructor(el, model, options) {
             this.el = el;
             this.options = options;
+            this.items = new Map();
             el.style.position = 'relative';
             this.legend = document.createElement('chart-legend');
             const ls = this.legend.style;
@@ -1168,23 +1168,31 @@ void main() {
             legendRoot.appendChild(style);
             const border = document.createElement('div');
             border.className = 'timechart-legend border';
-            for (const s of options.series) {
+            this.itemContainer = border;
+            this.update();
+            legendRoot.appendChild(border);
+            el.appendChild(this.legend);
+            model.updated.on(() => this.update());
+        }
+        update() {
+            var _a;
+            for (const s of this.options.series) {
+                if (this.items.has(s)) {
+                    continue;
+                }
                 const item = document.createElement('div');
                 item.className = 'item';
                 const example = document.createElement('div');
                 example.className = 'example';
-                example.style.height = `${(_a = s.lineWidth) !== null && _a !== void 0 ? _a : options.lineWidth}px`;
+                example.style.height = `${(_a = s.lineWidth) !== null && _a !== void 0 ? _a : this.options.lineWidth}px`;
                 example.style.backgroundColor = s.color.toString();
                 item.appendChild(example);
                 const name = document.createElement('label');
                 name.textContent = s.name;
                 item.appendChild(name);
-                border.appendChild(item);
+                this.itemContainer.appendChild(item);
+                this.items.set(s, item);
             }
-            legendRoot.appendChild(border);
-            el.appendChild(this.legend);
-        }
-        update() {
         }
     }
 
@@ -1292,7 +1300,8 @@ void main() {
     let NearestPoint = /** @class */ (() => {
         class NearestPoint {
             constructor(svg, options, pModel) {
-                var _a;
+                this.svg = svg;
+                this.options = options;
                 this.pModel = pModel;
                 this.intersectPoints = new Map();
                 const initTrans = svg.svgNode.createSVGTransform();
@@ -1310,19 +1319,25 @@ void main() {
                 const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
                 g.classList.add('timechart-crosshair-intersect');
                 g.appendChild(style);
-                for (const s of options.series) {
-                    const intersect = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                    intersect.style.stroke = s.color.toString();
-                    intersect.style.strokeWidth = `${(_a = s.lineWidth) !== null && _a !== void 0 ? _a : options.lineWidth}px`;
-                    intersect.transform.baseVal.initialize(initTrans);
-                    g.appendChild(intersect);
-                    this.intersectPoints.set(s, intersect);
-                }
+                this.container = g;
+                this.adjustIntersectPoints();
                 svg.svgNode.appendChild(g);
                 pModel.updated.on(() => this.adjustIntersectPoints());
             }
             adjustIntersectPoints() {
-                for (const [s, intersect] of this.intersectPoints) {
+                var _a;
+                const initTrans = this.svg.svgNode.createSVGTransform();
+                initTrans.setTranslate(0, 0);
+                for (const s of this.options.series) {
+                    if (!this.intersectPoints.has(s)) {
+                        const intersect = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                        intersect.style.stroke = s.color.toString();
+                        intersect.style.strokeWidth = `${(_a = s.lineWidth) !== null && _a !== void 0 ? _a : this.options.lineWidth}px`;
+                        intersect.transform.baseVal.initialize(initTrans);
+                        this.container.appendChild(intersect);
+                        this.intersectPoints.set(s, intersect);
+                    }
+                    const intersect = this.intersectPoints.get(s);
                     const point = this.pModel.points.get(s);
                     if (!point) {
                         intersect.style.visibility = 'hidden';
@@ -1364,7 +1379,7 @@ void main() {
             var _a, _b;
             this.el = el;
             options = options !== null && options !== void 0 ? options : {};
-            const series = (_b = (_a = options.series) === null || _a === void 0 ? void 0 : _a.map(s => (Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s)))) !== null && _b !== void 0 ? _b : [];
+            const series = (_b = (_a = options.series) === null || _a === void 0 ? void 0 : _a.map(s => this.completeSeriesOptions(s))) !== null && _b !== void 0 ? _b : [];
             const renderOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
             this.model = new RenderModel(renderOptions);
             const canvasLayer = new CanvasLayer(el, renderOptions, this.model);
@@ -1372,7 +1387,7 @@ void main() {
             const svgLayer = new SVGLayer(el);
             const contentBoxDetector = new ContentBoxDetector(el, renderOptions);
             const axisRenderer = new D3AxisRenderer(this.model, svgLayer.svgNode, renderOptions);
-            const legend = new Legend(el, renderOptions);
+            const legend = new Legend(el, this.model, renderOptions);
             const crosshair = new Crosshair(svgLayer, this.model, renderOptions, contentBoxDetector);
             const nearestPointModel = new NearestPointModel(canvasLayer, this.model, renderOptions, contentBoxDetector);
             const nearestPoint = new NearestPoint(svgLayer, renderOptions, nearestPointModel);
@@ -1381,6 +1396,9 @@ void main() {
             });
             this.onResize();
             window.addEventListener('resize', () => this.onResize());
+        }
+        completeSeriesOptions(s) {
+            return Object.assign(Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s), { _complete: true });
         }
         registerZoom(zoomOptions) {
             if (zoomOptions) {
@@ -1421,6 +1439,13 @@ void main() {
             this.model.resize(this.el.clientWidth, this.el.clientHeight);
         }
         update() {
+            // fix dynamic added series
+            for (let i = 0; i < this.options.series.length; i++) {
+                const s = this.options.series[i];
+                if (!s._complete) {
+                    this.options.series[i] = this.completeSeriesOptions(s);
+                }
+            }
             this.model.requestRedraw();
         }
     }
