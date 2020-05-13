@@ -627,6 +627,9 @@ class LineChartRenderer {
         this.syncDomain();
         const gl = this.gl;
         for (const [ds, arr] of this.arrays) {
+            if (!ds.visible) {
+                continue;
+            }
             const color = resolveColorRGBA(ds.color);
             gl.uniform4fv(this.program.locations.uColor, color);
             const lineWidth = (_a = ds.lineWidth) !== null && _a !== void 0 ? _a : this.options.lineWidth;
@@ -1162,6 +1165,10 @@ class Legend {
             flex-flow: row nowrap;
             align-items: center;
         }
+        .timechart-legend .item:not(.visible) {
+            color: gray;
+            text-decoration: line-through;
+        }
         .timechart-legend .item .example {
             width: 50px;
             margin-right: 10px;
@@ -1179,21 +1186,22 @@ class Legend {
     update() {
         var _a;
         for (const s of this.options.series) {
-            if (this.items.has(s)) {
-                continue;
+            if (!this.items.has(s)) {
+                const item = document.createElement('div');
+                item.className = 'item';
+                const example = document.createElement('div');
+                example.className = 'example';
+                example.style.height = `${(_a = s.lineWidth) !== null && _a !== void 0 ? _a : this.options.lineWidth}px`;
+                example.style.backgroundColor = s.color.toString();
+                item.appendChild(example);
+                const name = document.createElement('label');
+                name.textContent = s.name;
+                item.appendChild(name);
+                this.itemContainer.appendChild(item);
+                this.items.set(s, item);
             }
-            const item = document.createElement('div');
-            item.className = 'item';
-            const example = document.createElement('div');
-            example.className = 'example';
-            example.style.height = `${(_a = s.lineWidth) !== null && _a !== void 0 ? _a : this.options.lineWidth}px`;
-            example.style.backgroundColor = s.color.toString();
-            item.appendChild(example);
-            const name = document.createElement('label');
-            name.textContent = s.name;
-            item.appendChild(name);
-            this.itemContainer.appendChild(item);
-            this.items.set(s, item);
+            const item = this.items.get(s);
+            item.classList.toggle('visible', s.visible);
         }
     }
 }
@@ -1268,7 +1276,7 @@ let NearestPointModel = /** @class */ (() => {
             else {
                 const domain = this.model.xScale.invert(this.lastX);
                 for (const s of this.options.series) {
-                    if (s.data.length == 0) {
+                    if (s.data.length == 0 || !s.visible) {
                         this.points.delete(s);
                         continue;
                     }
@@ -1379,6 +1387,7 @@ const defaultOptions = {
 const defaultSeriesOptions = {
     color: rgb(0, 0, 0, 1),
     name: '',
+    visible: true,
 };
 class TimeChart {
     constructor(el, options) {
