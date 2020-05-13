@@ -37,6 +37,10 @@ export class RenderModel {
         this.requestRedraw();
     }
     update() {
+        this.updateModel();
+        this.updated.dispatch();
+    }
+    updateModel() {
         var _a, _b;
         for (const s of this.options.series) {
             if (!this.seriesInfo.has(s)) {
@@ -90,7 +94,6 @@ export class RenderModel {
                 this.yScale.domain([opYRange.min, opYRange.max]);
             }
         }
-        this.updated.dispatch();
     }
     requestRedraw() {
         if (this.redrawRequested) {

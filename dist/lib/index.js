@@ -85,6 +85,10 @@ class RenderModel {
         this.requestRedraw();
     }
     update() {
+        this.updateModel();
+        this.updated.dispatch();
+    }
+    updateModel() {
         var _a, _b;
         for (const s of this.options.series) {
             if (!this.seriesInfo.has(s)) {
@@ -138,7 +142,6 @@ class RenderModel {
                 this.yScale.domain([opYRange.min, opYRange.max]);
             }
         }
-        this.updated.dispatch();
     }
     requestRedraw() {
         if (this.redrawRequested) {
@@ -1265,6 +1268,10 @@ let NearestPointModel = /** @class */ (() => {
             else {
                 const domain = this.model.xScale.invert(this.lastX);
                 for (const s of this.options.series) {
+                    if (s.data.length == 0) {
+                        this.points.delete(s);
+                        continue;
+                    }
                     const pos = domainSearch(s.data, 0, s.data.length, domain, d => d.x);
                     const near = [];
                     if (pos > 0) {

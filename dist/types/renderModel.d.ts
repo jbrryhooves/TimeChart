@@ -20,6 +20,7 @@ export declare class RenderModel {
     resize(width: number, height: number): void;
     updated: EventDispatcher<() => void>;
     update(): void;
+    updateModel(): void;
     private redrawRequested;
     requestRedraw(): void;
     pxPoint(dataPoint: DataPoint): {
