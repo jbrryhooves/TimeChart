@@ -19,6 +19,9 @@ export declare class RenderModel {
     resized: EventDispatcher<(width: number, height: number) => void>;
     resize(width: number, height: number): void;
     updated: EventDispatcher<() => void>;
+    disposing: EventDispatcher<() => void>;
+    private disposed;
+    dispose(): void;
     update(): void;
     updateModel(): void;
     private redrawRequested;

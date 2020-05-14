@@ -70,6 +70,8 @@
             this.seriesInfo = new Map();
             this.resized = new EventDispatcher();
             this.updated = new EventDispatcher();
+            this.disposing = new EventDispatcher();
+            this.disposed = false;
             this.redrawRequested = false;
             if (options.xRange !== 'auto' && options.xRange) {
                 this.xScale.domain([options.xRange.min, options.xRange.max]);
@@ -84,6 +86,12 @@
             this.yScale.range([height - op.paddingBottom, op.paddingTop]);
             this.resized.dispatch(width, height);
             this.requestRedraw();
+        }
+        dispose() {
+            if (!this.disposed) {
+                this.disposing.dispatch();
+                this.disposed = true;
+            }
         }
         update() {
             this.updateModel();
@@ -151,7 +159,9 @@
             this.redrawRequested = true;
             requestAnimationFrame((time) => {
                 this.redrawRequested = false;
-                this.update();
+                if (!this.disposed) {
+                    this.update();
+                }
             });
         }
         pxPoint(dataPoint) {
@@ -673,13 +683,21 @@ void main() {
             if (!ctx) {
                 throw new Error('Unable to initialize WebGL. Your browser or machine may not support it.');
             }
-            const gl = ctx;
-            this.gl = gl;
+            this.gl = ctx;
             const bgColor = resolveColorRGBA(options.backgroundColor);
-            gl.clearColor(...bgColor);
+            ctx.clearColor(...bgColor);
             this.canvas = canvas;
             model.updated.on(() => this.clear());
             model.resized.on((w, h) => this.onResize(w, h));
+            model.disposing.on(() => {
+                el.removeChild(canvas);
+                canvas.width = 0;
+                canvas.height = 0;
+                const lossContext = ctx.getExtension('WEBGL_lose_context');
+                if (lossContext) {
+                    lossContext.loseContext();
+                }
+            });
         }
         onResize(width, height) {
             const canvas = this.canvas;
@@ -695,13 +713,16 @@ void main() {
     }
 
     class SVGLayer {
-        constructor(el) {
+        constructor(el, model) {
             el.style.position = 'relative';
             this.svgNode = document.createElementNS("http://www.w3.org/2000/svg", "svg");
             this.svgNode.style.position = 'absolute';
             this.svgNode.style.width = '100%';
             this.svgNode.style.height = '100%';
             el.appendChild(this.svgNode);
+            model.disposing.on(() => {
+                el.removeChild(this.svgNode);
+            });
         }
     }
     function makeContentBox(model, options) {
@@ -718,7 +739,7 @@ void main() {
 
     let ContentBoxDetector = /** @class */ (() => {
         class ContentBoxDetector {
-            constructor(el, options) {
+            constructor(el, model, options) {
                 el.style.position = 'relative';
                 this.node = document.createElement('div');
                 this.node.style.position = 'absolute';
@@ -727,6 +748,9 @@ void main() {
                 this.node.style.top = `${options.paddingTop}px`;
                 this.node.style.bottom = `${options.paddingBottom}px`;
                 el.appendChild(this.node);
+                model.disposing.on(() => {
+                    el.removeChild(this.node);
+                });
             }
         }
         ContentBoxDetector.meta = {
@@ -1183,6 +1207,9 @@ void main() {
             legendRoot.appendChild(border);
             el.appendChild(this.legend);
             model.updated.on(() => this.update());
+            model.disposing.on(() => {
+                el.removeChild(this.legend);
+            });
         }
         update() {
             var _a;
@@ -1394,14 +1421,15 @@ void main() {
         constructor(el, options) {
             var _a, _b;
             this.el = el;
+            this.disposed = false;
             options = options !== null && options !== void 0 ? options : {};
             const series = (_b = (_a = options.series) === null || _a === void 0 ? void 0 : _a.map(s => this.completeSeriesOptions(s))) !== null && _b !== void 0 ? _b : [];
             const renderOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
             this.model = new RenderModel(renderOptions);
             const canvasLayer = new CanvasLayer(el, renderOptions, this.model);
             const lineChartRenderer = new LineChartRenderer(this.model, canvasLayer.gl, renderOptions);
-            const svgLayer = new SVGLayer(el);
-            const contentBoxDetector = new ContentBoxDetector(el, renderOptions);
+            const svgLayer = new SVGLayer(el, this.model);
+            const contentBoxDetector = new ContentBoxDetector(el, this.model, renderOptions);
             const axisRenderer = new D3AxisRenderer(this.model, svgLayer.svgNode, renderOptions);
             const legend = new Legend(el, this.model, renderOptions);
             const crosshair = new Crosshair(svgLayer, this.model, renderOptions, contentBoxDetector);
@@ -1411,7 +1439,11 @@ void main() {
                 zoom: this.registerZoom(options.zoom)
             });
             this.onResize();
-            window.addEventListener('resize', () => this.onResize());
+            const resizeHandler = () => this.onResize();
+            window.addEventListener('resize', resizeHandler);
+            this.model.disposing.on(() => {
+                window.removeEventListener('resize', resizeHandler);
+            });
         }
         completeSeriesOptions(s) {
             return Object.assign(Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s), { _complete: true });
@@ -1455,6 +1487,9 @@ void main() {
             this.model.resize(this.el.clientWidth, this.el.clientHeight);
         }
         update() {
+            if (this.disposed) {
+                throw new Error('Cannot update after dispose.');
+            }
             // fix dynamic added series
             for (let i = 0; i < this.options.series.length; i++) {
                 const s = this.options.series[i];
@@ -1463,6 +1498,10 @@ void main() {
                 }
             }
             this.model.requestRedraw();
+        }
+        dispose() {
+            this.model.dispose();
+            this.disposed = true;
         }
     }
 

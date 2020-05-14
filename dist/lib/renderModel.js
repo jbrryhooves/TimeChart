@@ -21,6 +21,8 @@ export class RenderModel {
         this.seriesInfo = new Map();
         this.resized = new EventDispatcher();
         this.updated = new EventDispatcher();
+        this.disposing = new EventDispatcher();
+        this.disposed = false;
         this.redrawRequested = false;
         if (options.xRange !== 'auto' && options.xRange) {
             this.xScale.domain([options.xRange.min, options.xRange.max]);
@@ -35,6 +37,12 @@ export class RenderModel {
         this.yScale.range([height - op.paddingBottom, op.paddingTop]);
         this.resized.dispatch(width, height);
         this.requestRedraw();
+    }
+    dispose() {
+        if (!this.disposed) {
+            this.disposing.dispatch();
+            this.disposed = true;
+        }
     }
     update() {
         this.updateModel();
@@ -102,7 +110,9 @@ export class RenderModel {
         this.redrawRequested = true;
         requestAnimationFrame((time) => {
             this.redrawRequested = false;
-            this.update();
+            if (!this.disposed) {
+                this.update();
+            }
         });
     }
     pxPoint(dataPoint) {

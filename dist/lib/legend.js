@@ -40,6 +40,9 @@ export class Legend {
         legendRoot.appendChild(border);
         el.appendChild(this.legend);
         model.updated.on(() => this.update());
+        model.disposing.on(() => {
+            el.removeChild(this.legend);
+        });
     }
     update() {
         var _a;

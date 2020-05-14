@@ -1,6 +1,6 @@
 let ContentBoxDetector = /** @class */ (() => {
     class ContentBoxDetector {
-        constructor(el, options) {
+        constructor(el, model, options) {
             el.style.position = 'relative';
             this.node = document.createElement('div');
             this.node.style.position = 'absolute';
@@ -9,6 +9,9 @@ let ContentBoxDetector = /** @class */ (() => {
             this.node.style.top = `${options.paddingTop}px`;
             this.node.style.bottom = `${options.paddingBottom}px`;
             el.appendChild(this.node);
+            model.disposing.on(() => {
+                el.removeChild(this.node);
+            });
         }
     }
     ContentBoxDetector.meta = {
