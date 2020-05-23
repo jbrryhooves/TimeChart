@@ -1168,6 +1168,7 @@ void main() {
     class Legend {
         constructor(el, model, options) {
             this.el = el;
+            this.model = model;
             this.options = options;
             this.items = new Map();
             el.style.position = 'relative';
@@ -1189,6 +1190,7 @@ void main() {
             display: flex;
             flex-flow: row nowrap;
             align-items: center;
+            user-select: none;
         }
         .item:not(.visible) {
             color: gray;
@@ -1221,6 +1223,10 @@ void main() {
                     name.textContent = s.name;
                     item.appendChild(name);
                     this.itemContainer.appendChild(item);
+                    item.addEventListener('click', (ev) => {
+                        s.visible = !s.visible;
+                        this.model.update();
+                    });
                     this.items.set(s, { item, example });
                 }
                 const item = this.items.get(s);
@@ -1433,7 +1439,7 @@ void main() {
             const nearestPointModel = new NearestPointModel(canvasLayer, this.model, renderOptions, contentBoxDetector);
             const nearestPoint = new NearestPoint(svgLayer, renderOptions, nearestPointModel);
             this.options = Object.assign(renderOptions, {
-                zoom: this.registerZoom(options.zoom)
+                zoom: this.registerZoom(contentBoxDetector.node, options.zoom)
             });
             this.onResize();
             const resizeHandler = () => this.onResize();
@@ -1445,9 +1451,9 @@ void main() {
         completeSeriesOptions(s) {
             return Object.assign(Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s), { _complete: true });
         }
-        registerZoom(zoomOptions) {
+        registerZoom(el, zoomOptions) {
             if (zoomOptions) {
-                const z = new ChartZoom(this.el, {
+                const z = new ChartZoom(el, {
                     x: zoomOptions.x && Object.assign(Object.assign({}, zoomOptions.x), { scale: this.model.xScale }),
                     y: zoomOptions.y && Object.assign(Object.assign({}, zoomOptions.y), { scale: this.model.yScale })
                 });

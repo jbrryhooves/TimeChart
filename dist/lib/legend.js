@@ -1,6 +1,7 @@
 export class Legend {
     constructor(el, model, options) {
         this.el = el;
+        this.model = model;
         this.options = options;
         this.items = new Map();
         el.style.position = 'relative';
@@ -22,6 +23,7 @@ export class Legend {
             display: flex;
             flex-flow: row nowrap;
             align-items: center;
+            user-select: none;
         }
         .item:not(.visible) {
             color: gray;
@@ -54,6 +56,10 @@ export class Legend {
                 name.textContent = s.name;
                 item.appendChild(name);
                 this.itemContainer.appendChild(item);
+                item.addEventListener('click', (ev) => {
+                    s.visible = !s.visible;
+                    this.model.update();
+                });
                 this.items.set(s, { item, example });
             }
             const item = this.items.get(s);

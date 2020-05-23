@@ -2,6 +2,7 @@ import { ResolvedRenderOptions, TimeChartSeriesOptions } from "./options";
 import { RenderModel } from './renderModel';
 export declare class Legend {
     private el;
+    private model;
     private options;
     legend: HTMLElement;
     items: Map<TimeChartSeriesOptions, {
