@@ -4,8 +4,11 @@ export declare class Legend {
     private el;
     private options;
     legend: HTMLElement;
-    items: Map<TimeChartSeriesOptions, HTMLElement>;
-    itemContainer: HTMLElement;
+    items: Map<TimeChartSeriesOptions, {
+        item: HTMLElement;
+        example: HTMLElement;
+    }>;
+    itemContainer: Node;
     constructor(el: HTMLElement, model: RenderModel, options: ResolvedRenderOptions);
     update(): void;
 }

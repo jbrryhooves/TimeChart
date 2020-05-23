@@ -1179,32 +1179,29 @@ void main() {
             const legendRoot = this.legend.attachShadow({ mode: 'open' });
             const style = document.createElement('style');
             style.textContent = `
-        .timechart-legend.border {
+        :host {
             background: white;
             border: 1px solid hsl(0, 0%, 80%);
             border-radius: 3px;
             padding: 5px 10px;
         }
-        .timechart-legend .item {
+        .item {
             display: flex;
             flex-flow: row nowrap;
             align-items: center;
         }
-        .timechart-legend .item:not(.visible) {
+        .item:not(.visible) {
             color: gray;
             text-decoration: line-through;
         }
-        .timechart-legend .item .example {
+        .item .example {
             width: 50px;
             margin-right: 10px;
             max-height: 1em;
         }`;
             legendRoot.appendChild(style);
-            const border = document.createElement('div');
-            border.className = 'timechart-legend border';
-            this.itemContainer = border;
+            this.itemContainer = legendRoot;
             this.update();
-            legendRoot.appendChild(border);
             el.appendChild(this.legend);
             model.updated.on(() => this.update());
             model.disposing.on(() => {
@@ -1219,17 +1216,17 @@ void main() {
                     item.className = 'item';
                     const example = document.createElement('div');
                     example.className = 'example';
-                    example.style.height = `${(_a = s.lineWidth) !== null && _a !== void 0 ? _a : this.options.lineWidth}px`;
-                    example.style.backgroundColor = s.color.toString();
                     item.appendChild(example);
                     const name = document.createElement('label');
                     name.textContent = s.name;
                     item.appendChild(name);
                     this.itemContainer.appendChild(item);
-                    this.items.set(s, item);
+                    this.items.set(s, { item, example });
                 }
                 const item = this.items.get(s);
-                item.classList.toggle('visible', s.visible);
+                item.item.classList.toggle('visible', s.visible);
+                item.example.style.height = `${(_a = s.lineWidth) !== null && _a !== void 0 ? _a : this.options.lineWidth}px`;
+                item.example.style.backgroundColor = s.color.toString();
             }
         }
     }
@@ -1401,7 +1398,7 @@ void main() {
     const defaultOptions = {
         pixelRatio: window.devicePixelRatio,
         lineWidth: 1,
-        backgroundColor: d3Color.rgb(255, 255, 255, 1),
+        backgroundColor: d3Color.rgb(0, 0, 0, 0),
         paddingTop: 10,
         paddingRight: 10,
         paddingLeft: 45,
