@@ -8,7 +8,7 @@ export declare class LineChartRenderer {
     private arrays;
     private height;
     private width;
-    constructor(model: RenderModel, gl: WebGL2RenderingContext, options: ResolvedRenderOptions);
+    constructor(model: RenderModel, gl: WebGL2RenderingContext | WebGLRenderingContext, options: ResolvedRenderOptions);
     syncBuffer(): void;
     onResize(width: number, height: number): void;
     drawFrame(): void;

@@ -39,6 +39,7 @@ interface TimeChartRenderOptions {
      **/
     baseTime: number;
     debugWebGL: boolean;
+    forceWebGL1: boolean;
 }
 interface TimeChartOptionsBase extends TimeChartRenderOptions {
 }

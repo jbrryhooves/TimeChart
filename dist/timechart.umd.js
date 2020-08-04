@@ -345,13 +345,19 @@
 
     class LinkedWebGLProgram {
         constructor(gl, vertexSource, fragmentSource, debug) {
-            var _a;
             this.gl = gl;
+            this.debug = debug;
             const program = throwIfFalsy(gl.createProgram());
             gl.attachShader(program, throwIfFalsy(createShader(gl, gl.VERTEX_SHADER, vertexSource, debug)));
             gl.attachShader(program, throwIfFalsy(createShader(gl, gl.FRAGMENT_SHADER, fragmentSource, debug)));
+            this.program = program;
+        }
+        link() {
+            var _a;
+            const gl = this.gl;
+            const program = this.program;
             gl.linkProgram(program);
-            if (debug) {
+            if (this.debug) {
                 const success = gl.getProgramParameter(program, gl.LINK_STATUS);
                 if (!success) {
                     const message = (_a = gl.getProgramInfoLog(program)) !== null && _a !== void 0 ? _a : 'Unknown Error.';
@@ -359,7 +365,6 @@
                     throw new Error(message);
                 }
             }
-            this.program = program;
         }
         use() {
             this.gl.useProgram(this.program);
@@ -392,10 +397,8 @@
         return [rgbColor.r / 255, rgbColor.g / 255, rgbColor.b / 255, rgbColor.opacity];
     }
 
-    const vsSource = `#version 300 es
-layout (location = ${0 /* DATA_POINT */}) in vec2 aDataPoint;
-layout (location = ${1 /* DIR */}) in vec2 aDir;
-
+    function vsSource(gl) {
+        const body = `
 uniform vec2 uModelScale;
 uniform vec2 uModelTranslation;
 uniform vec2 uProjectionScale;
@@ -407,28 +410,54 @@ void main() {
     dir = normalize(dir);
     vec2 pos2d = uProjectionScale * (cssPose + vec2(-dir.y, dir.x) * uLineWidth);
     gl_Position = vec4(pos2d, 0, 1);
-}
-`;
-    const fsSource = `#version 300 es
+}`;
+        if (gl instanceof WebGL2RenderingContext) {
+            return `#version 300 es
+layout (location = ${0 /* DATA_POINT */}) in vec2 aDataPoint;
+layout (location = ${1 /* DIR */}) in vec2 aDir;
+${body}`;
+        }
+        else {
+            return `
+attribute vec2 aDataPoint;
+attribute vec2 aDir;
+${body}`;
+        }
+    }
+    function fsSource(gl) {
+        if (gl instanceof WebGL2RenderingContext) {
+            return `#version 300 es
 precision lowp float;
-
 uniform vec4 uColor;
-
 out vec4 outColor;
-
 void main() {
     outColor = uColor;
-}
-`;
+}`;
+        }
+        else {
+            return `
+precision lowp float;
+uniform vec4 uColor;
+void main() {
+    gl_FragColor = uColor;
+}`;
+        }
+    }
     class LineChartWebGLProgram extends LinkedWebGLProgram {
         constructor(gl, debug) {
-            super(gl, vsSource, fsSource, debug);
+            super(gl, vsSource(gl), fsSource(gl), debug);
+            if (gl instanceof WebGLRenderingContext) {
+                gl.bindAttribLocation(this.program, 0 /* DATA_POINT */, 'aDataPoint');
+                gl.bindAttribLocation(this.program, 1 /* DIR */, 'aDir');
+            }
+            this.link();
+            const getLoc = (name) => throwIfFalsy(gl.getUniformLocation(this.program, name));
             this.locations = {
-                uModelScale: throwIfFalsy(gl.getUniformLocation(this.program, 'uModelScale')),
-                uModelTranslation: throwIfFalsy(gl.getUniformLocation(this.program, 'uModelTranslation')),
-                uProjectionScale: throwIfFalsy(gl.getUniformLocation(this.program, 'uProjectionScale')),
-                uLineWidth: throwIfFalsy(gl.getUniformLocation(this.program, 'uLineWidth')),
-                uColor: throwIfFalsy(gl.getUniformLocation(this.program, 'uColor')),
+                uModelScale: getLoc('uModelScale'),
+                uModelTranslation: getLoc('uModelTranslation'),
+                uProjectionScale: getLoc('uProjectionScale'),
+                uLineWidth: getLoc('uLineWidth'),
+                uColor: getLoc('uColor'),
             };
         }
     }
@@ -438,7 +467,30 @@ void main() {
     const BYTES_PER_POINT = INDEX_PER_POINT * Float32Array.BYTES_PER_ELEMENT;
     const BUFFER_DATA_POINT_CAPACITY = 128 * 1024;
     const BUFFER_CAPACITY = BUFFER_DATA_POINT_CAPACITY * INDEX_PER_DATAPOINT + 2 * POINT_PER_DATAPOINT;
-    class VertexArray {
+    class WebGL2VAO {
+        constructor(gl) {
+            this.gl = gl;
+            this.vao = throwIfFalsy(gl.createVertexArray());
+            this.bind();
+        }
+        bind() {
+            this.gl.bindVertexArray(this.vao);
+        }
+        clear() {
+            this.gl.deleteVertexArray(this.vao);
+        }
+    }
+    class WebGL1BufferInfo {
+        constructor(bindFunc) {
+            this.bindFunc = bindFunc;
+        }
+        bind() {
+            this.bindFunc();
+        }
+        clear() {
+        }
+    }
+    class SeriesSegmentVertexArray {
         /**
          * @param firstDataPointIndex At least 1, since datapoint 0 has no path to draw.
          */
@@ -447,18 +499,27 @@ void main() {
             this.dataPoints = dataPoints;
             this.firstDataPointIndex = firstDataPointIndex;
             this.length = 0;
-            this.vao = throwIfFalsy(gl.createVertexArray());
-            this.bind();
             this.dataBuffer = throwIfFalsy(gl.createBuffer());
-            gl.bindBuffer(gl.ARRAY_BUFFER, this.dataBuffer);
+            const bindFunc = () => {
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.dataBuffer);
+                gl.enableVertexAttribArray(0 /* DATA_POINT */);
+                gl.vertexAttribPointer(0 /* DATA_POINT */, 2, gl.FLOAT, false, BYTES_PER_POINT, 0);
+                gl.enableVertexAttribArray(1 /* DIR */);
+                gl.vertexAttribPointer(1 /* DIR */, 2, gl.FLOAT, false, BYTES_PER_POINT, 2 * Float32Array.BYTES_PER_ELEMENT);
+            };
+            if (gl instanceof WebGL2RenderingContext) {
+                this.vao = new WebGL2VAO(gl);
+            }
+            else {
+                // const vaoExt = gl.getExtension('OES_vertex_array_object');
+                // if (vaoExt) {
+                //     this.vao = new OESVAO(vaoExt);
+                // } else {
+                this.vao = new WebGL1BufferInfo(bindFunc);
+                // }
+            }
+            bindFunc();
             gl.bufferData(gl.ARRAY_BUFFER, BUFFER_CAPACITY * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
-            gl.enableVertexAttribArray(0 /* DATA_POINT */);
-            gl.vertexAttribPointer(0 /* DATA_POINT */, 2, gl.FLOAT, false, BYTES_PER_POINT, 0);
-            gl.enableVertexAttribArray(1 /* DIR */);
-            gl.vertexAttribPointer(1 /* DIR */, 2, gl.FLOAT, false, BYTES_PER_POINT, 2 * Float32Array.BYTES_PER_ELEMENT);
-        }
-        bind() {
-            this.gl.bindVertexArray(this.vao);
         }
         clear() {
             this.length = 0;
@@ -466,7 +527,7 @@ void main() {
         delete() {
             this.clear();
             this.gl.deleteBuffer(this.dataBuffer);
-            this.gl.deleteVertexArray(this.vao);
+            this.vao.clear();
         }
         /**
          * @returns Next data point index, or `dataPoints.length` if all data added.
@@ -532,12 +593,12 @@ void main() {
             const last = Math.min(this.length, renderIndex.max - this.firstDataPointIndex);
             const count = last - first;
             const gl = this.gl;
-            this.bind();
+            this.vao.bind();
             gl.drawArrays(gl.TRIANGLE_STRIP, first * POINT_PER_DATAPOINT, count * POINT_PER_DATAPOINT);
         }
     }
     /**
-     * An array of `VertexArray` to represent a series
+     * An array of `SeriesSegmentVertexArray` to represent a series
      *
      * `series.data`  index: 0  [1 ... C] [C+1 ... 2C] ... (C = `BUFFER_DATA_POINT_CAPACITY`)
      * `vertexArrays` index:     0         1           ...
@@ -552,7 +613,7 @@ void main() {
             let activeArray;
             let bufferedDataPointNum = 1;
             const newArray = () => {
-                activeArray = new VertexArray(this.gl, this.series.data, bufferedDataPointNum);
+                activeArray = new SeriesSegmentVertexArray(this.gl, this.series.data, bufferedDataPointNum);
                 this.vertexArrays.push(activeArray);
             };
             if (this.vertexArrays.length > 0) {
@@ -651,6 +712,12 @@ void main() {
                 };
                 arr.draw(renderDomain);
             }
+            if (this.options.debugWebGL) {
+                const err = gl.getError();
+                if (err != gl.NO_ERROR) {
+                    throw new Error(`WebGL error ${err}`);
+                }
+            }
         }
         ySvgToView(v) {
             return -v + this.height / 2;
@@ -670,6 +737,19 @@ void main() {
         }
     }
 
+    function getContext(canvas, forceWebGL1) {
+        if (!forceWebGL1) {
+            const ctx = canvas.getContext('webgl2');
+            if (ctx) {
+                return ctx;
+            }
+        }
+        const ctx = canvas.getContext('webgl');
+        if (ctx) {
+            return ctx;
+        }
+        throw new Error('Unable to initialize WebGL. Your browser or machine may not support it.');
+    }
     class CanvasLayer {
         constructor(el, options, model) {
             this.options = options;
@@ -679,13 +759,9 @@ void main() {
             canvas.style.height = '100%';
             canvas.style.position = 'absolute';
             el.appendChild(canvas);
-            const ctx = canvas.getContext('webgl2');
-            if (!ctx) {
-                throw new Error('Unable to initialize WebGL. Your browser or machine may not support it.');
-            }
-            this.gl = ctx;
+            this.gl = getContext(canvas, options.forceWebGL1);
             const bgColor = resolveColorRGBA(options.backgroundColor);
-            ctx.clearColor(...bgColor);
+            this.gl.clearColor(...bgColor);
             this.canvas = canvas;
             model.updated.on(() => this.clear());
             model.resized.on((w, h) => this.onResize(w, h));
@@ -693,7 +769,7 @@ void main() {
                 el.removeChild(canvas);
                 canvas.width = 0;
                 canvas.height = 0;
-                const lossContext = ctx.getExtension('WEBGL_lose_context');
+                const lossContext = this.gl.getExtension('WEBGL_lose_context');
                 if (lossContext) {
                     lossContext.loseContext();
                 }
@@ -1402,6 +1478,7 @@ void main() {
         realTime: false,
         baseTime: 0,
         debugWebGL: false,
+        forceWebGL1: false,
     };
     const defaultSeriesOptions = {
         color: d3Color.rgb(0, 0, 0, 1),

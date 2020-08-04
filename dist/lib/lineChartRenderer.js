@@ -2,10 +2,8 @@ import { vec2 } from 'gl-matrix';
 import { LinkedWebGLProgram, throwIfFalsy } from './webGLUtils';
 import { domainSearch } from './utils';
 import { resolveColorRGBA } from './options';
-const vsSource = `#version 300 es
-layout (location = ${0 /* DATA_POINT */}) in vec2 aDataPoint;
-layout (location = ${1 /* DIR */}) in vec2 aDir;
-
+function vsSource(gl) {
+    const body = `
 uniform vec2 uModelScale;
 uniform vec2 uModelTranslation;
 uniform vec2 uProjectionScale;
@@ -17,28 +15,56 @@ void main() {
     dir = normalize(dir);
     vec2 pos2d = uProjectionScale * (cssPose + vec2(-dir.y, dir.x) * uLineWidth);
     gl_Position = vec4(pos2d, 0, 1);
+}`;
+    if (gl instanceof WebGL2RenderingContext) {
+        return `#version 300 es
+layout (location = ${0 /* DATA_POINT */}) in vec2 aDataPoint;
+layout (location = ${1 /* DIR */}) in vec2 aDir;
+${body}`;
+    }
+    else {
+        return `
+attribute vec2 aDataPoint;
+attribute vec2 aDir;
+${body}`;
+    }
 }
+function fsSource(gl) {
+    const body = `
 `;
-const fsSource = `#version 300 es
+    if (gl instanceof WebGL2RenderingContext) {
+        return `#version 300 es
 precision lowp float;
-
 uniform vec4 uColor;
-
 out vec4 outColor;
-
 void main() {
     outColor = uColor;
+}`;
+    }
+    else {
+        return `
+precision lowp float;
+uniform vec4 uColor;
+void main() {
+    gl_FragColor = uColor;
+}`;
+    }
 }
-`;
 class LineChartWebGLProgram extends LinkedWebGLProgram {
     constructor(gl, debug) {
-        super(gl, vsSource, fsSource, debug);
+        super(gl, vsSource(gl), fsSource(gl), debug);
+        if (gl instanceof WebGLRenderingContext) {
+            gl.bindAttribLocation(this.program, 0 /* DATA_POINT */, 'aDataPoint');
+            gl.bindAttribLocation(this.program, 1 /* DIR */, 'aDir');
+        }
+        this.link();
+        const getLoc = (name) => throwIfFalsy(gl.getUniformLocation(this.program, name));
         this.locations = {
-            uModelScale: throwIfFalsy(gl.getUniformLocation(this.program, 'uModelScale')),
-            uModelTranslation: throwIfFalsy(gl.getUniformLocation(this.program, 'uModelTranslation')),
-            uProjectionScale: throwIfFalsy(gl.getUniformLocation(this.program, 'uProjectionScale')),
-            uLineWidth: throwIfFalsy(gl.getUniformLocation(this.program, 'uLineWidth')),
-            uColor: throwIfFalsy(gl.getUniformLocation(this.program, 'uColor')),
+            uModelScale: getLoc('uModelScale'),
+            uModelTranslation: getLoc('uModelTranslation'),
+            uProjectionScale: getLoc('uProjectionScale'),
+            uLineWidth: getLoc('uLineWidth'),
+            uColor: getLoc('uColor'),
         };
     }
 }
@@ -48,7 +74,43 @@ const INDEX_PER_DATAPOINT = INDEX_PER_POINT * POINT_PER_DATAPOINT;
 const BYTES_PER_POINT = INDEX_PER_POINT * Float32Array.BYTES_PER_ELEMENT;
 const BUFFER_DATA_POINT_CAPACITY = 128 * 1024;
 const BUFFER_CAPACITY = BUFFER_DATA_POINT_CAPACITY * INDEX_PER_DATAPOINT + 2 * POINT_PER_DATAPOINT;
-class VertexArray {
+class WebGL2VAO {
+    constructor(gl) {
+        this.gl = gl;
+        this.vao = throwIfFalsy(gl.createVertexArray());
+        this.bind();
+    }
+    bind() {
+        this.gl.bindVertexArray(this.vao);
+    }
+    clear() {
+        this.gl.deleteVertexArray(this.vao);
+    }
+}
+class OESVAO {
+    constructor(vaoExt) {
+        this.vaoExt = vaoExt;
+        this.vao = throwIfFalsy(vaoExt.createVertexArrayOES());
+        this.bind();
+    }
+    bind() {
+        this.vaoExt.bindVertexArrayOES(this.vao);
+    }
+    clear() {
+        this.vaoExt.deleteVertexArrayOES(this.vao);
+    }
+}
+class WebGL1BufferInfo {
+    constructor(bindFunc) {
+        this.bindFunc = bindFunc;
+    }
+    bind() {
+        this.bindFunc();
+    }
+    clear() {
+    }
+}
+class SeriesSegmentVertexArray {
     /**
      * @param firstDataPointIndex At least 1, since datapoint 0 has no path to draw.
      */
@@ -57,18 +119,27 @@ class VertexArray {
         this.dataPoints = dataPoints;
         this.firstDataPointIndex = firstDataPointIndex;
         this.length = 0;
-        this.vao = throwIfFalsy(gl.createVertexArray());
-        this.bind();
         this.dataBuffer = throwIfFalsy(gl.createBuffer());
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.dataBuffer);
+        const bindFunc = () => {
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.dataBuffer);
+            gl.enableVertexAttribArray(0 /* DATA_POINT */);
+            gl.vertexAttribPointer(0 /* DATA_POINT */, 2, gl.FLOAT, false, BYTES_PER_POINT, 0);
+            gl.enableVertexAttribArray(1 /* DIR */);
+            gl.vertexAttribPointer(1 /* DIR */, 2, gl.FLOAT, false, BYTES_PER_POINT, 2 * Float32Array.BYTES_PER_ELEMENT);
+        };
+        if (gl instanceof WebGL2RenderingContext) {
+            this.vao = new WebGL2VAO(gl);
+        }
+        else {
+            // const vaoExt = gl.getExtension('OES_vertex_array_object');
+            // if (vaoExt) {
+            //     this.vao = new OESVAO(vaoExt);
+            // } else {
+            this.vao = new WebGL1BufferInfo(bindFunc);
+            // }
+        }
+        bindFunc();
         gl.bufferData(gl.ARRAY_BUFFER, BUFFER_CAPACITY * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
-        gl.enableVertexAttribArray(0 /* DATA_POINT */);
-        gl.vertexAttribPointer(0 /* DATA_POINT */, 2, gl.FLOAT, false, BYTES_PER_POINT, 0);
-        gl.enableVertexAttribArray(1 /* DIR */);
-        gl.vertexAttribPointer(1 /* DIR */, 2, gl.FLOAT, false, BYTES_PER_POINT, 2 * Float32Array.BYTES_PER_ELEMENT);
-    }
-    bind() {
-        this.gl.bindVertexArray(this.vao);
     }
     clear() {
         this.length = 0;
@@ -76,7 +147,7 @@ class VertexArray {
     delete() {
         this.clear();
         this.gl.deleteBuffer(this.dataBuffer);
-        this.gl.deleteVertexArray(this.vao);
+        this.vao.clear();
     }
     /**
      * @returns Next data point index, or `dataPoints.length` if all data added.
@@ -142,12 +213,12 @@ class VertexArray {
         const last = Math.min(this.length, renderIndex.max - this.firstDataPointIndex);
         const count = last - first;
         const gl = this.gl;
-        this.bind();
+        this.vao.bind();
         gl.drawArrays(gl.TRIANGLE_STRIP, first * POINT_PER_DATAPOINT, count * POINT_PER_DATAPOINT);
     }
 }
 /**
- * An array of `VertexArray` to represent a series
+ * An array of `SeriesSegmentVertexArray` to represent a series
  *
  * `series.data`  index: 0  [1 ... C] [C+1 ... 2C] ... (C = `BUFFER_DATA_POINT_CAPACITY`)
  * `vertexArrays` index:     0         1           ...
@@ -162,7 +233,7 @@ class SeriesVertexArray {
         let activeArray;
         let bufferedDataPointNum = 1;
         const newArray = () => {
-            activeArray = new VertexArray(this.gl, this.series.data, bufferedDataPointNum);
+            activeArray = new SeriesSegmentVertexArray(this.gl, this.series.data, bufferedDataPointNum);
             this.vertexArrays.push(activeArray);
         };
         if (this.vertexArrays.length > 0) {
@@ -260,6 +331,12 @@ export class LineChartRenderer {
                 max: this.model.xScale.invert(this.width + lineWidth / 2),
             };
             arr.draw(renderDomain);
+        }
+        if (this.options.debugWebGL) {
+            const err = gl.getError();
+            if (err != gl.NO_ERROR) {
+                throw new Error(`WebGL error ${err}`);
+            }
         }
     }
     ySvgToView(v) {

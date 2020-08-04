@@ -1,4 +1,17 @@
 import { resolveColorRGBA } from './options';
+function getContext(canvas, forceWebGL1) {
+    if (!forceWebGL1) {
+        const ctx = canvas.getContext('webgl2');
+        if (ctx) {
+            return ctx;
+        }
+    }
+    const ctx = canvas.getContext('webgl');
+    if (ctx) {
+        return ctx;
+    }
+    throw new Error('Unable to initialize WebGL. Your browser or machine may not support it.');
+}
 export class CanvasLayer {
     constructor(el, options, model) {
         this.options = options;
@@ -8,13 +21,9 @@ export class CanvasLayer {
         canvas.style.height = '100%';
         canvas.style.position = 'absolute';
         el.appendChild(canvas);
-        const ctx = canvas.getContext('webgl2');
-        if (!ctx) {
-            throw new Error('Unable to initialize WebGL. Your browser or machine may not support it.');
-        }
-        this.gl = ctx;
+        this.gl = getContext(canvas, options.forceWebGL1);
         const bgColor = resolveColorRGBA(options.backgroundColor);
-        ctx.clearColor(...bgColor);
+        this.gl.clearColor(...bgColor);
         this.canvas = canvas;
         model.updated.on(() => this.clear());
         model.resized.on((w, h) => this.onResize(w, h));
@@ -22,7 +31,7 @@ export class CanvasLayer {
             el.removeChild(canvas);
             canvas.width = 0;
             canvas.height = 0;
-            const lossContext = ctx.getExtension('WEBGL_lose_context');
+            const lossContext = this.gl.getExtension('WEBGL_lose_context');
             if (lossContext) {
                 lossContext.loseContext();
             }
