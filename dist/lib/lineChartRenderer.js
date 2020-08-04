@@ -16,37 +16,37 @@ void main() {
     vec2 pos2d = uProjectionScale * (cssPose + vec2(-dir.y, dir.x) * uLineWidth);
     gl_Position = vec4(pos2d, 0, 1);
 }`;
-    if (gl instanceof WebGL2RenderingContext) {
-        return `#version 300 es
-layout (location = ${0 /* DATA_POINT */}) in vec2 aDataPoint;
-layout (location = ${1 /* DIR */}) in vec2 aDir;
-${body}`;
-    }
-    else {
+    if (gl instanceof WebGLRenderingContext) {
         return `
 attribute vec2 aDataPoint;
 attribute vec2 aDir;
+${body}`;
+    }
+    else {
+        return `#version 300 es
+layout (location = ${0 /* DATA_POINT */}) in vec2 aDataPoint;
+layout (location = ${1 /* DIR */}) in vec2 aDir;
 ${body}`;
     }
 }
 function fsSource(gl) {
     const body = `
 `;
-    if (gl instanceof WebGL2RenderingContext) {
+    if (gl instanceof WebGLRenderingContext) {
+        return `
+precision lowp float;
+uniform vec4 uColor;
+void main() {
+    gl_FragColor = uColor;
+}`;
+    }
+    else {
         return `#version 300 es
 precision lowp float;
 uniform vec4 uColor;
 out vec4 outColor;
 void main() {
     outColor = uColor;
-}`;
-    }
-    else {
-        return `
-precision lowp float;
-uniform vec4 uColor;
-void main() {
-    gl_FragColor = uColor;
 }`;
     }
 }
@@ -127,16 +127,17 @@ class SeriesSegmentVertexArray {
             gl.enableVertexAttribArray(1 /* DIR */);
             gl.vertexAttribPointer(1 /* DIR */, 2, gl.FLOAT, false, BYTES_PER_POINT, 2 * Float32Array.BYTES_PER_ELEMENT);
         };
-        if (gl instanceof WebGL2RenderingContext) {
-            this.vao = new WebGL2VAO(gl);
+        if (gl instanceof WebGLRenderingContext) {
+            const vaoExt = gl.getExtension('OES_vertex_array_object');
+            if (vaoExt) {
+                this.vao = new OESVAO(vaoExt);
+            }
+            else {
+                this.vao = new WebGL1BufferInfo(bindFunc);
+            }
         }
         else {
-            // const vaoExt = gl.getExtension('OES_vertex_array_object');
-            // if (vaoExt) {
-            //     this.vao = new OESVAO(vaoExt);
-            // } else {
-            this.vao = new WebGL1BufferInfo(bindFunc);
-            // }
+            this.vao = new WebGL2VAO(gl);
         }
         bindFunc();
         gl.bufferData(gl.ARRAY_BUFFER, BUFFER_CAPACITY * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
