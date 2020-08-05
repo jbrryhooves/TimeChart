@@ -767,12 +767,11 @@ void main() {
     class CanvasLayer {
         constructor(el, options, model) {
             this.options = options;
-            el.style.position = 'relative';
             const canvas = document.createElement('canvas');
             canvas.style.width = '100%';
             canvas.style.height = '100%';
             canvas.style.position = 'absolute';
-            el.appendChild(canvas);
+            el.shadowRoot.appendChild(canvas);
             this.gl = getContext(canvas, options.forceWebGL1);
             const bgColor = resolveColorRGBA(options.backgroundColor);
             this.gl.clearColor(...bgColor);
@@ -780,7 +779,7 @@ void main() {
             model.updated.on(() => this.clear());
             model.resized.on((w, h) => this.onResize(w, h));
             model.disposing.on(() => {
-                el.removeChild(canvas);
+                el.shadowRoot.removeChild(canvas);
                 canvas.width = 0;
                 canvas.height = 0;
                 const lossContext = this.gl.getExtension('WEBGL_lose_context');
@@ -804,14 +803,13 @@ void main() {
 
     class SVGLayer {
         constructor(el, model) {
-            el.style.position = 'relative';
             this.svgNode = document.createElementNS("http://www.w3.org/2000/svg", "svg");
             this.svgNode.style.position = 'absolute';
             this.svgNode.style.width = '100%';
             this.svgNode.style.height = '100%';
-            el.appendChild(this.svgNode);
+            el.shadowRoot.appendChild(this.svgNode);
             model.disposing.on(() => {
-                el.removeChild(this.svgNode);
+                el.shadowRoot.removeChild(this.svgNode);
             });
         }
     }
@@ -829,16 +827,15 @@ void main() {
 
     class ContentBoxDetector {
         constructor(el, model, options) {
-            el.style.position = 'relative';
             this.node = document.createElement('div');
             this.node.style.position = 'absolute';
             this.node.style.left = `${options.paddingLeft}px`;
             this.node.style.right = `${options.paddingRight}px`;
             this.node.style.top = `${options.paddingTop}px`;
             this.node.style.bottom = `${options.paddingBottom}px`;
-            el.appendChild(this.node);
+            el.shadowRoot.appendChild(this.node);
             model.disposing.on(() => {
-                el.removeChild(this.node);
+                el.shadowRoot.removeChild(this.node);
             });
         }
     }
@@ -1258,7 +1255,6 @@ void main() {
             this.model = model;
             this.options = options;
             this.items = new Map();
-            el.style.position = 'relative';
             this.legend = document.createElement('chart-legend');
             const ls = this.legend.style;
             ls.position = 'absolute';
@@ -1267,34 +1263,34 @@ void main() {
             const legendRoot = this.legend.attachShadow({ mode: 'open' });
             const style = document.createElement('style');
             style.textContent = `
-        :host {
-            background: white;
-            border: 1px solid hsl(0, 0%, 80%);
-            border-radius: 3px;
-            padding: 5px 10px;
-        }
-        .item {
-            display: flex;
-            flex-flow: row nowrap;
-            align-items: center;
-            user-select: none;
-        }
-        .item:not(.visible) {
-            color: gray;
-            text-decoration: line-through;
-        }
-        .item .example {
-            width: 50px;
-            margin-right: 10px;
-            max-height: 1em;
-        }`;
+:host {
+    background: var(--background-overlay, white);
+    border: 1px solid hsl(0, 0%, 80%);
+    border-radius: 3px;
+    padding: 5px 10px;
+}
+.item {
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    user-select: none;
+}
+.item:not(.visible) {
+    color: gray;
+    text-decoration: line-through;
+}
+.item .example {
+    width: 50px;
+    margin-right: 10px;
+    max-height: 1em;
+}`;
             legendRoot.appendChild(style);
             this.itemContainer = legendRoot;
             this.update();
-            el.appendChild(this.legend);
+            el.shadowRoot.appendChild(this.legend);
             model.updated.on(() => this.update());
             model.disposing.on(() => {
-                el.removeChild(this.legend);
+                el.shadowRoot.removeChild(this.legend);
             });
         }
         update() {
@@ -1331,12 +1327,12 @@ void main() {
             initTrans.setTranslate(0, 0);
             const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
             style.textContent = `
-        .timechart-crosshair {
-            stroke: #000000A0;
-            stroke-width: 1;
-            stroke-dasharray: 2 1;
-            visibility: hidden;
-        }`;
+.timechart-crosshair {
+    stroke: currentColor;
+    stroke-width: 1;
+    stroke-dasharray: 2 1;
+    visibility: hidden;
+}`;
             const hLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
             hLine.transform.baseVal.initialize(initTrans);
             hLine.x2.baseVal.newValueSpecifiedUnits(SVGLength.SVG_LENGTHTYPE_PERCENTAGE, 100);
@@ -1433,14 +1429,13 @@ void main() {
             initTrans.setTranslate(0, 0);
             const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
             style.textContent = `
-        .timechart-crosshair-intersect {
-            fill: ${options.backgroundColor};
-            visibility: hidden;
-        }
-        .timechart-crosshair-intersect circle {
-            r: 3px;
-        }
-        `;
+.timechart-crosshair-intersect {
+    fill: var(--background-overlay, white);
+    visibility: hidden;
+}
+.timechart-crosshair-intersect circle {
+    r: 3px;
+}`;
             const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             g.classList.add('timechart-crosshair-intersect');
             g.appendChild(style);
@@ -1495,7 +1490,6 @@ void main() {
         forceWebGL1: false,
     };
     const defaultSeriesOptions = {
-        color: d3Color.rgb(0, 0, 0, 1),
         name: '',
         visible: true,
     };
@@ -1508,6 +1502,14 @@ void main() {
             const series = (_b = (_a = options.series) === null || _a === void 0 ? void 0 : _a.map(s => this.completeSeriesOptions(s))) !== null && _b !== void 0 ? _b : [];
             const renderOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
             this.model = new RenderModel(renderOptions);
+            const shadowRoot = el.attachShadow({ mode: 'open' });
+            const style = document.createElement('style');
+            style.innerText = `
+:host {
+    contain: size layout paint style;
+    position: relative;
+}`;
+            shadowRoot.appendChild(style);
             const canvasLayer = new CanvasLayer(el, renderOptions, this.model);
             const lineChartRenderer = new LineChartRenderer(this.model, canvasLayer.gl, renderOptions);
             const svgLayer = new SVGLayer(el, this.model);
@@ -1525,10 +1527,11 @@ void main() {
             window.addEventListener('resize', resizeHandler);
             this.model.disposing.on(() => {
                 window.removeEventListener('resize', resizeHandler);
+                shadowRoot.removeChild(style);
             });
         }
         completeSeriesOptions(s) {
-            return Object.assign(Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s), { _complete: true });
+            return Object.assign(Object.assign(Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), { color: getComputedStyle(this.el).getPropertyValue('color') }), s), { _complete: true });
         }
         registerZoom(el, zoomOptions) {
             if (zoomOptions) {

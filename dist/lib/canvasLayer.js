@@ -15,12 +15,11 @@ function getContext(canvas, forceWebGL1) {
 export class CanvasLayer {
     constructor(el, options, model) {
         this.options = options;
-        el.style.position = 'relative';
         const canvas = document.createElement('canvas');
         canvas.style.width = '100%';
         canvas.style.height = '100%';
         canvas.style.position = 'absolute';
-        el.appendChild(canvas);
+        el.shadowRoot.appendChild(canvas);
         this.gl = getContext(canvas, options.forceWebGL1);
         const bgColor = resolveColorRGBA(options.backgroundColor);
         this.gl.clearColor(...bgColor);
@@ -28,7 +27,7 @@ export class CanvasLayer {
         model.updated.on(() => this.clear());
         model.resized.on((w, h) => this.onResize(w, h));
         model.disposing.on(() => {
-            el.removeChild(canvas);
+            el.shadowRoot.removeChild(canvas);
             canvas.width = 0;
             canvas.height = 0;
             const lossContext = this.gl.getExtension('WEBGL_lose_context');

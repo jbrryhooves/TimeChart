@@ -25,7 +25,6 @@ const defaultOptions = {
     forceWebGL1: false,
 };
 const defaultSeriesOptions = {
-    color: rgb(0, 0, 0, 1),
     name: '',
     visible: true,
 };
@@ -38,6 +37,14 @@ export default class TimeChart {
         const series = (_b = (_a = options.series) === null || _a === void 0 ? void 0 : _a.map(s => this.completeSeriesOptions(s))) !== null && _b !== void 0 ? _b : [];
         const renderOptions = Object.assign(Object.assign(Object.assign({}, defaultOptions), options), { series });
         this.model = new RenderModel(renderOptions);
+        const shadowRoot = el.attachShadow({ mode: 'open' });
+        const style = document.createElement('style');
+        style.innerText = `
+:host {
+    contain: size layout paint style;
+    position: relative;
+}`;
+        shadowRoot.appendChild(style);
         const canvasLayer = new CanvasLayer(el, renderOptions, this.model);
         const lineChartRenderer = new LineChartRenderer(this.model, canvasLayer.gl, renderOptions);
         const svgLayer = new SVGLayer(el, this.model);
@@ -55,10 +62,11 @@ export default class TimeChart {
         window.addEventListener('resize', resizeHandler);
         this.model.disposing.on(() => {
             window.removeEventListener('resize', resizeHandler);
+            shadowRoot.removeChild(style);
         });
     }
     completeSeriesOptions(s) {
-        return Object.assign(Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), s), { _complete: true });
+        return Object.assign(Object.assign(Object.assign(Object.assign({ data: [] }, defaultSeriesOptions), { color: getComputedStyle(this.el).getPropertyValue('color') }), s), { _complete: true });
     }
     registerZoom(el, zoomOptions) {
         if (zoomOptions) {
