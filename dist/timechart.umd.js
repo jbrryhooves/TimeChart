@@ -1233,7 +1233,7 @@ void main() {
         }
         update() {
             const xs = this.model.xScale;
-            const xts = d3Scale.scaleTime()
+            const xts = this.options.xScaleType()
                 .domain(xs.domain().map(d => d + this.options.baseTime))
                 .range(xs.range());
             this.xAxis.scale(xts);
@@ -1486,6 +1486,7 @@ void main() {
         yRange: 'auto',
         realTime: false,
         baseTime: 0,
+        xScaleType: d3Scale.scaleTime,
         debugWebGL: false,
         forceWebGL1: false,
     };

@@ -1,5 +1,4 @@
 import { select } from "d3-selection";
-import { scaleTime } from 'd3-scale';
 import { axisBottom, axisLeft } from 'd3-axis';
 export class D3AxisRenderer {
     constructor(model, svg, options) {
@@ -15,7 +14,7 @@ export class D3AxisRenderer {
     }
     update() {
         const xs = this.model.xScale;
-        const xts = scaleTime()
+        const xts = this.options.xScaleType()
             .domain(xs.domain().map(d => d + this.options.baseTime))
             .range(xs.range());
         this.xAxis.scale(xts);

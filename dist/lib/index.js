@@ -9,6 +9,7 @@ import { D3AxisRenderer } from './d3AxisRenderer';
 import { Legend } from './legend';
 import { Crosshair } from './crosshair';
 import { NearestPoint, NearestPointModel } from './nearestPoint';
+import { scaleTime } from 'd3-scale';
 const defaultOptions = {
     pixelRatio: window.devicePixelRatio,
     lineWidth: 1,
@@ -21,6 +22,7 @@ const defaultOptions = {
     yRange: 'auto',
     realTime: false,
     baseTime: 0,
+    xScaleType: scaleTime,
     debugWebGL: false,
     forceWebGL1: false,
 };

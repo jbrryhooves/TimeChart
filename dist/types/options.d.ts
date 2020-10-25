@@ -16,6 +16,16 @@ export interface ResolvedZoomOptions {
     x?: AxisZoomOptions;
     y?: AxisZoomOptions;
 }
+interface ScaleBase {
+    (x: number | {
+        valueOf(): number;
+    }): number;
+    domain(): number[] | Date[];
+    range(): number[];
+    copy(): this;
+    domain(domain: Array<number>): this;
+    range(range: ReadonlyArray<number>): this;
+}
 interface TimeChartRenderOptions {
     pixelRatio: number;
     lineWidth: number;
@@ -38,6 +48,7 @@ interface TimeChartRenderOptions {
      * Set this option and keep the absolute value of x small for higher floating point precision.
      **/
     baseTime: number;
+    xScaleType: () => ScaleBase;
     debugWebGL: boolean;
     forceWebGL1: boolean;
 }
