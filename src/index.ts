@@ -10,8 +10,9 @@ import { ChartZoom } from './chartZoom';
 import { D3AxisRenderer } from './d3AxisRenderer';
 import { Legend } from './legend';
 import { Crosshair } from './crosshair';
-import { NearestPoint, NearestPointModel } from './nearestPoint';
+import { NearestPoint, NearestPointModel, CursorValueUpdate} from './nearestPoint';
 import { CapableElement as ZoomableElement } from './chartZoom/options';
+import { EventDispatcher } from './utils';
 import { scaleTime } from 'd3-scale';
 
 const defaultOptions = {
@@ -36,8 +37,24 @@ const defaultSeriesOptions = {
     visible: true,
 } as const;
 
+// interface CursorValueUpdate {
+//     series: string;
+//     x: number;
+//     y: number;
+
+// }
+
+class CursorValueEvent extends EventTarget {
+    // emitCursorValues(CursorValueUpdate[]seriesName: string, x: number, y: number) {
+    emitCursorValues(series: CursorValueUpdate[]) {
+        this.dispatchEvent(new CustomEvent<CursorValueUpdate[]>('cursorValue', { detail: series}));       
+    }
+}
+
 export default class TimeChart {
     public options: ResolvedOptions;
+    public cursorValueUpdated = new CursorValueEvent();
+
 
     private model: RenderModel;
     private disposed = false;
@@ -92,6 +109,12 @@ export default class TimeChart {
         this.model.disposing.on(() => {
             window.removeEventListener('resize', resizeHandler);
             shadowRoot.removeChild(style);
+        })
+
+        nearestPoint.updated.on((seriesValues: CursorValueUpdate[]) => {
+            this.cursorValueUpdated.emitCursorValues(seriesValues);
+
+            // console.log(`points updated: ${series}, ${x}, ${y}`);
         })
     }
 

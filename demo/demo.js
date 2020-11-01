@@ -57,4 +57,8 @@ function main() {
     document.getElementById('follow-btn').addEventListener('click', function () {
         chart.options.realTime = true;
     });
+
+    chart.cursorValueUpdated.addEventListener("cursorValue", function(e) {
+        console.log(e.detail);// "Britney is singing baby!"
+    });
 }

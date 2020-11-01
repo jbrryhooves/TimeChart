@@ -71,6 +71,15 @@ export class NearestPointModel {
     }
 }
 
+
+
+export interface CursorValueUpdate {
+    seriesName: string;
+    x: number;
+    y: number;
+
+}
+
 export class NearestPoint {
     static meta = {
         name: 'nearestPoint',
@@ -80,6 +89,9 @@ export class NearestPoint {
     private intersectPoints = new Map<TimeChartSeriesOptions, SVGGeometryElement>();
     private container: SVGGElement;
 
+    updated = new EventDispatcher<(series:CursorValueUpdate[]) => void>();
+
+    
     constructor(
         private svg: SVGLayer,
         private options: ResolvedRenderOptions,
@@ -112,7 +124,11 @@ export class NearestPoint {
     adjustIntersectPoints() {
         const initTrans = this.svg.svgNode.createSVGTransform();
         initTrans.setTranslate(0, 0);
-        for (const s of this.options.series) {
+        let seriesCursors: CursorValueUpdate [] = [];
+
+        for (const {index, s} of this.options.series.map((s, index)=> ({index, s}))) {
+        // for (const s of this.options.series) {
+        // this.options.series.forEach((s, index)=> {
             if (!this.intersectPoints.has(s)) {
                 const intersect = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 intersect.style.stroke = s.color.toString();
@@ -128,7 +144,16 @@ export class NearestPoint {
             } else {
                 intersect.style.visibility = 'visible';
                 intersect.transform.baseVal.getItem(0).setTranslate(point.x, point.y);
+                seriesCursors.push({seriesName: s.name, x:point.x, y:point.y})
             }
+            
         }
+        if(seriesCursors.length > 0){
+            // this.updated.dispatch( s.name, point.x, point.y);
+            this.updated.dispatch(seriesCursors);
+
+        }
+
+
     }
 }
