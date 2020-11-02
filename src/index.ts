@@ -111,9 +111,22 @@ export default class TimeChart {
             shadowRoot.removeChild(style);
         })
 
-        nearestPoint.updated.on((seriesValues: CursorValueUpdate[]) => {
-            this.cursorValueUpdated.emitCursorValues(seriesValues);
+        nearestPoint.updated.on((seriesValues: TimeChartSeriesOptions[]) => {
+            var values: CursorValueUpdate[] = [];
+            for (let i = 0; i < seriesValues.length; i++) {
+                let p = nearestPointModel.cursorValues.get(seriesValues[i]);
+                console.log(`points updated: ${seriesValues[i].name},  ${p?.value}`);
 
+                if(p){
+                    values.push({seriesName: seriesValues[i].name, y:p.value})   
+                }
+            }
+
+            if(values.length > 0){
+                this.cursorValueUpdated.emitCursorValues(values);
+            }
+            
+            // console.log(`points updated: ${series}, ${x}, ${y}`);
             // console.log(`points updated: ${series}, ${x}, ${y}`);
         })
     }

@@ -12,6 +12,7 @@ export class NearestPointModel {
     }
 
     points = new Map<TimeChartSeriesOptions, {x: number, y: number}>();
+    cursorValues = new Map<TimeChartSeriesOptions, {value: number}>();
     private lastX: null | number = null;
 
     updated = new EventDispatcher();
@@ -38,11 +39,13 @@ export class NearestPointModel {
     adjustPoints() {
         if (this.lastX === null) {
             this.points.clear();
+            this.cursorValues.clear();
         } else {
             const domain = this.model.xScale.invert(this.lastX);
             for (const s of this.options.series) {
                 if (s.data.length == 0 || !s.visible) {
                     this.points.delete(s);
+                    this.cursorValues.delete(s);
                     continue;
                 }
                 const pos = domainSearch(s.data, 0, s.data.length, domain, d => d.x);
@@ -62,8 +65,10 @@ export class NearestPointModel {
                 if (pxPoint.x <= width && pxPoint.x >= 0 &&
                     pxPoint.y <= height && pxPoint.y >= 0) {
                     this.points.set(s, pxPoint);
+                    this.cursorValues.set(s, {value:near[0].y});
                 } else {
                     this.points.delete(s);
+                    this.cursorValues.delete(s);
                 }
             }
         }
@@ -75,7 +80,7 @@ export class NearestPointModel {
 
 export interface CursorValueUpdate {
     seriesName: string;
-    x: number;
+    // x: number;
     y: number;
 
 }
@@ -89,7 +94,8 @@ export class NearestPoint {
     private intersectPoints = new Map<TimeChartSeriesOptions, SVGGeometryElement>();
     private container: SVGGElement;
 
-    updated = new EventDispatcher<(series:CursorValueUpdate[]) => void>();
+    // updated = new EventDispatcher<(series:CursorValueUpdate[]) => void>();
+    updated = new EventDispatcher<(series:TimeChartSeriesOptions[]) => void>();
 
     
     constructor(
@@ -124,7 +130,7 @@ export class NearestPoint {
     adjustIntersectPoints() {
         const initTrans = this.svg.svgNode.createSVGTransform();
         initTrans.setTranslate(0, 0);
-        let seriesCursors: CursorValueUpdate [] = [];
+        let seriesCursors: TimeChartSeriesOptions [] = [];
 
         for (const {index, s} of this.options.series.map((s, index)=> ({index, s}))) {
         // for (const s of this.options.series) {
@@ -144,7 +150,8 @@ export class NearestPoint {
             } else {
                 intersect.style.visibility = 'visible';
                 intersect.transform.baseVal.getItem(0).setTranslate(point.x, point.y);
-                seriesCursors.push({seriesName: s.name, x:point.x, y:point.y})
+                // seriesCursors.push({seriesName: s.name, x:point.x, y:point.y})
+                seriesCursors.push(s);
             }
             
         }
