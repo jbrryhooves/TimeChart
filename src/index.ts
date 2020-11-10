@@ -115,7 +115,7 @@ export default class TimeChart {
             var values: CursorValueUpdate[] = [];
             for (let i = 0; i < seriesValues.length; i++) {
                 let p = nearestPointModel.cursorValues.get(seriesValues[i]);
-                console.log(`points updated: ${seriesValues[i].name},  ${p?.value}`);
+                // console.log(`points updated: ${seriesValues[i].name},  ${p?.value}`);
 
                 if(p){
                     values.push({seriesName: seriesValues[i].name, y:p.value})   
